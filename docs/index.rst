@@ -1,5 +1,5 @@
 Welcome to This Quake Does Not Exist's documentation!
-======================================
+=====================================================
 
 .. toctree::
    :maxdepth: 2

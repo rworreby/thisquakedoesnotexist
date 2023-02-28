@@ -32,13 +32,13 @@ You can either clone the public repository:
 
 .. code-block:: console
 
-    $ git clone git://github.com/rworreby/thisquakedoesnotexist
+    $ git clone https://gitlab.ethz.ch/worreby-msc-thesis/thisquakedoesnotexist
 
 Or download the `tarball`_:
 
 .. code-block:: console
 
-    $ curl -OJL https://github.com/rworreby/thisquakedoesnotexist/tarball/master
+    $ curl -OJL https://gitlab.ethz.ch/worreby-msc-thesis/thisquakedoesnotexist/tarball/master
 
 Once you have a copy of the source, you can install it with:
 
@@ -47,5 +47,5 @@ Once you have a copy of the source, you can install it with:
     $ python setup.py install
 
 
-.. _Github repo: https://github.com/rworreby/thisquakedoesnotexist
-.. _tarball: https://github.com/rworreby/thisquakedoesnotexist/tarball/master
+.. _Github repo: https://gitlab.ethz.ch/worreby-msc-thesis/thisquakedoesnotexist
+.. _tarball: https://gitlab.ethz.ch/worreby-msc-thesis/thisquakedoesnotexist/tarball/master

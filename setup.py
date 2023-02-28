@@ -17,16 +17,14 @@ test_requirements = ['pytest>=3', ]
 setup(
     author="Robin Worreby",
     author_email='robin.worreby@math.ethz.ch',
-    python_requires='>=3.6',
+    python_requires='>=3.10',
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.10',
     ],
     description="Synthetic Earthquake Data Generation using Generative Adverserial Networks",
     entry_points={
@@ -43,7 +41,7 @@ setup(
     packages=find_packages(include=['thisquakedoesnotexist', 'thisquakedoesnotexist.*']),
     test_suite='tests',
     tests_require=test_requirements,
-    url='https://github.com/rworreby/thisquakedoesnotexist',
+    url='https://gitlab.ethz.ch/worreby-msc-thesis/thisquakedoesnotexist',
     version='0.1.0',
     zip_safe=False,
 )

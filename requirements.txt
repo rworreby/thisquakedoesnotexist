@@ -42,5 +42,6 @@ sphinxcontrib-qthelp==1.0.3
 sphinxcontrib-serializinghtml==1.1.5
 tomli==2.0.1
 torch==1.13.1
+torchvision==0.14.1
 typing_extensions==4.5.0
 urllib3==1.26.14

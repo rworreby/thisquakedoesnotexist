@@ -105,3 +105,6 @@ quake_venv/
 # IDE settings
 .vscode/
 .idea/
+
+# Repo folder
+data/

@@ -3,12 +3,16 @@ import numpy as np
 
 
 class Downsampler:
-    """Simple class to downsample a fileset from a HDF5 file.
+    """ Simple class to downsample a fileset from a HDF5 file.
 
     If the dimension is 1, downsampling is done on the first dimension.
     If the dimension is 3, downsampling is done on the second dimension.
     Otherwise, no downsampling is performed.
 
+     :param filename: Datafile name to read from
+    :type filename: str
+    :param outfile: Datafile name where the downsampled data is written to
+    :type outfile: str
     :param burnin: Length of file at the beginning to be discarded (burn-in)
     :type burnin: float
     :param duration: Total length of file in seconds
@@ -28,7 +32,7 @@ class Downsampler:
         self.filename = filename
         self.outfile = outfile
         self.h5_file = h5py.File(self.filename, "r")
-        self.data = h5py.File(f"{self.outfile}.h5", "a")
+        self.data = h5py.File(self.outfile, "a")
         self.burnin = burnin
         self.duration = duration
         self.sample_rate = sample_rate

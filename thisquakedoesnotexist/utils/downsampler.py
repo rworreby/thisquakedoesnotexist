@@ -40,9 +40,6 @@ class Downsampler:
     def __repr__(self) -> str:
         return f"Downsampler instance for file: {self.filename}"
 
-    def transpose_file(self):
-        pass
-
     def downsample(self, factor: int, threshold: float):
         """downsample_by_factor downsample data by a factor (frequency) and a threshold (magnitude).
 

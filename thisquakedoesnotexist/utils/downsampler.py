@@ -60,16 +60,15 @@ class Downsampler:
             ds_file = np.array(self.h5_file[val])
             dimension = len(self.h5_file[val].shape)
 
-            begin = int(self.burnin * self.sample_rate)
+            begin = int(self.burnin * self.sample_rate * factor)
             end = int(self.duration * self.sample_rate * factor + begin)
             if dimension == 1:
                 self.data[val] = self.h5_file[val][begin:end:factor]
             elif dimension == 2:
                 self.data[val] = self.h5_file[val][:, threshold_start:]
             elif dimension == 3:
-                self.data[val] = self.h5_file[val][
-                    :, begin:end:factor, threshold_start:
-                ]
+                self.data[val] = \
+                    self.h5_file[val][:, begin:end:factor, threshold_start:]
             else:
                 print(f"Nothing to be done for {val}, skipping downsampling.")
                 self.data[val] = self.h5_file[val][:, :]

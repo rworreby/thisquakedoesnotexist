@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 
-class Downsampler:
+class DataPreprocessor:
     """ Simple class to downsample a fileset from a HDF5 file.
 
     If the dimension is 1, downsampling is done on the first dimension.

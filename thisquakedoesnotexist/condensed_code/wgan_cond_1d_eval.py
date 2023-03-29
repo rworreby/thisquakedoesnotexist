@@ -43,41 +43,6 @@ from thisquakedoesnotexist.utils.utils import *
 from thisquakedoesnotexist.utils.param_parser import ParamParser
 # from thisquakedoesnotexist.plotting.fn_plot import *
 
-# -------- Input Parameters -------
-# config_d = {
-#     'data_file': '../data/japan/waveforms.npy',
-#     'attr_file': '../data/japan/attributes.csv',
-
-#     # -------- traning configuration -----------
-#     'batch_size': 40,
-#     'epochs': 300,
-#     # ---------- GAN configuration ----
-#     # Size of input image to discriminator (lx,)
-#     'lt': 1000,
-#     # dimension of Gaussian noise
-#     'noise_dim': 100,
-#     # Adam optimizser parasmeters:
-#     'lr': 1e-4,
-#     # ---- wasserstein gan configuration -------
-#     # number of iterations for critic
-#     'n_critic': 10,
-#     'gp_lambda': 10.0,
-#     # Adam optimizer parameters :
-#     'beta1': 0.0,
-#     'beta2': 0.9,
-#     # gan file: architecture definitions
-#     'gan_file': 'gan1d.py',
-#     # Conditional Configuration
-#     # number of distance bins
-#     'ndist_bins': 10,
-#     # ---------------------------- output configuration ---------------------
-#     #'out_dir': '/scratch/mflorez/fourier/ffn1D/exp/m64_lr5_2',
-#     'out_dir': '../data/output',
-#     'print_every': 400,
-#     'save_every': 1,
-# }
-
-
 
 tracking_uri = '/home/rworreby/thisquakedoesnotexist/mlflow/'
 mlflow.set_tracking_uri(tracking_uri)

@@ -15,11 +15,14 @@ class ParamParser:
                                 help="Device to use. Set to 1 for GPU (default), 0 for CPU.")
         setup_args.add_argument('--name', type=str, default='Unnamed', help='Set the name of the Model')
         setup_args.add_argument('--data_file', type=str, default='thisquakedoesnotexist/data/japan/waveforms.npy',
-                                help='Path to waveforms data file. Needs to by in .npy format. Default: "thisquakedoesnotexist/data/japan/waveforms.npy"')
+                                help='Path to waveforms data file. Needs to by in .npy format.\
+                                    Default: "thisquakedoesnotexist/data/japan/waveforms.npy"')
         setup_args.add_argument('--attr_file', type=str, default='thisquakedoesnotexist/data/japan/attributes.csv',
-                                help='Path to attributes data file. Needs to by in .csv format. Default: thisquakedoesnotexist/data/japan/attributes.csv"')
+                                help='Path to attributes data file. Needs to by in .csv format.\
+                                    Default: thisquakedoesnotexist/data/japan/attributes.csv"')
         setup_args.add_argument('--gan-model', type=str, default='thisquakedoesnotexist/condensed_code/gan1d.py',
-                                help='Path to GAN model architecture file. Default: "thisquakedoesnotexist/condensed_code/gan1d.py"')    
+                                help='Path to GAN model architecture file.\
+                                    Default: "thisquakedoesnotexist/condensed_code/gan1d.py"')    
 
         # Model parameters
         model_args = parser.add_argument_group('Model Parameters')

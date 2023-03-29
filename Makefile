@@ -1,4 +1,5 @@
-.PHONY: clean clean-build clean-pyc clean-test coverage dist docs help install lint lint/flake8 preprocess train pipeline
+.PHONY: clean clean-build clean-pyc clean-test coverage dist docs 
+.PHONY: help install lint lint/flake8 preprocess train pipeline
 .DEFAULT_GOAL := help
 
 define BROWSER_PYSCRIPT
@@ -33,7 +34,7 @@ clean-build: ## remove build artifacts
 	rm -fr dist/
 	rm -fr .eggs/
 	find . -name '*.egg-info' -exec rm -fr {} +
-	find . -name '*.egg' -exec rm -f {} +
+	find . -name '*.egg' -exec rm -fr {} +
 
 clean-pyc: ## remove Python file artifacts
 	find . -name '*.pyc' -exec rm -f {} +
@@ -90,14 +91,12 @@ install: clean ## install the package to the active Python's site-packages
 	python setup.py install
 
 preprocess: clean ## run data preprocessing: downsampling, filtering, filling NaNs
-	rm -f thisquakedoesnotexist/data/attributes.csv
-	rm -f thisquakedoesnotexist/data/downsampled.h5
-	rm -f thisquakedoesnotexist/data/waveforms.npy
-	./thisquakedoesnotexist/utils/preprocessor.py
+	rm -f thisquakedoesnotexist/data/japan/attributes.csv
+	rm -f thisquakedoesnotexist/data/japan/downsampled.h5
+	rm -f thisquakedoesnotexist/data/japan/waveforms.npy
+	python thisquakedoesnotexist/condensed_code/preprocess_data.py
 
 train: clean ## train the conditional GAN model
 	./thisquakedoesnotexist/condensed_code/run_cwgan_1d.sh
 
-pipeline: ## runs the preprocessor and training steps successively
-	preprocess
-	train
+pipeline: preprocess train ## runs the preprocessor and training steps successively

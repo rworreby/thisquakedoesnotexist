@@ -88,3 +88,6 @@ dist: clean ## builds source and wheel package
 
 install: clean ## install the package to the active Python's site-packages
 	python setup.py install
+
+run: clean
+	./thisquakedoesnotexist/condensed_code/run_cwgan_1d.sh

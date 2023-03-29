@@ -1,9 +1,11 @@
+#!/usr/bin/env python3
+
 import h5py
 import numpy as np
 import pandas as pd
 
 
-class DataPreprocessor:
+class Preprocessor:
     """ Simple class to downsample a fileset from a HDF5 file.
 
     If the dimension is 1, downsampling is done on the first dimension.
@@ -29,8 +31,8 @@ class DataPreprocessor:
         burnin: float,
         duration: float,
         sample_rate: float,
-        waveforms_file: str = '../data/japan/waveforms.npy',
-        attributes_file: str = '../data/japan/attributes.csv',
+        waveforms_file: str = 'thisquakedoesnotexist/data/japan/waveforms.npy',
+        attributes_file: str = 'thisquakedoesnotexist/data/japan/attributes.csv',
     ):
         self.filename = filename
         self.outfile = outfile
@@ -45,21 +47,24 @@ class DataPreprocessor:
     def __repr__(self) -> str:
         return f"Downsampler instance for file: {self.filename}"
 
-    def downsample(self, factor: int, threshold: float):
+    def downsample(self, factor: int, lower_bound: float, upper_bound: float):
         """downsample_by_factor downsample data by a factor (frequency) and a threshold (magnitude).
 
-        Selects all data with magnitude larger than the provided threshold,
-        sampled at the frequency of :param factor:.
+        Selects all data with magnitudes between the provided lower and upper bounds,
+        sampled at the frequency of factor.
 
         :param factor: Factor by which the data is downsampled
         :type factor: int
-        :param threshold: Threshold by which is downsampled
+        :param lower_bound: Lower threshold from above which data is drawn
+        :type threshold: float
+        :param upper_bound: Upper threshold from below which data is drawn
         :type threshold: float
         """
 
         magnitudes = self.h5_file["magnitude"][0]
-        threshold_start = np.argmax(magnitudes > threshold)
-        print(f"startpoint: {threshold_start}")
+        threshold_start = np.argmax(magnitudes > lower_bound)
+        threshold_end = np.argmax(magnitudes > upper_bound)
+        print(f"Startpoint: {threshold_start}\nEndpoint: {threshold_end}")
 
         for val in self.h5_file:
             ds_file = np.array(self.h5_file[val])
@@ -70,10 +75,10 @@ class DataPreprocessor:
             if dimension == 1:
                 self.data[val] = self.h5_file[val][begin:end:factor]
             elif dimension == 2:
-                self.data[val] = self.h5_file[val][:, threshold_start:]
+                self.data[val] = self.h5_file[val][:, threshold_start:threshold_end]
             elif dimension == 3:
                 self.data[val] = \
-                    np.array(self.h5_file[val][:, begin:end:factor, threshold_start:]).transpose((2, 0, 1))
+                    np.array(self.h5_file[val][:, begin:end:factor, threshold_start:threshold_end]).transpose((2, 0, 1))
             else:
                 print(f"Nothing to be done for {val}, skipping downsampling.")
                 self.data[val] = self.h5_file[val][:, :]

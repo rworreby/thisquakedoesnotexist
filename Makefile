@@ -1,4 +1,4 @@
-.PHONY: clean clean-build clean-pyc clean-test coverage dist docs help install lint lint/flake8
+.PHONY: clean clean-build clean-pyc clean-test coverage dist docs help install lint lint/flake8 preprocess train pipeline
 .DEFAULT_GOAL := help
 
 define BROWSER_PYSCRIPT
@@ -89,5 +89,15 @@ dist: clean ## builds source and wheel package
 install: clean ## install the package to the active Python's site-packages
 	python setup.py install
 
-run: clean
+preprocess: clean ## run data preprocessing: downsampling, filtering, filling NaNs
+	rm -f thisquakedoesnotexist/data/attributes.csv
+	rm -f thisquakedoesnotexist/data/downsampled.h5
+	rm -f thisquakedoesnotexist/data/waveforms.npy
+	./thisquakedoesnotexist/utils/preprocessor.py
+
+train: clean ## train the conditional GAN model
 	./thisquakedoesnotexist/condensed_code/run_cwgan_1d.sh
+
+pipeline: ## runs the preprocessor and training steps successively
+	preprocess
+	train

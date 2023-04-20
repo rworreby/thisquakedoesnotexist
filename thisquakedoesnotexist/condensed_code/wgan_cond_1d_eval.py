@@ -18,8 +18,6 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from importlib import reload
 # ------ optimizers ------
 import torch.optim as optim
@@ -28,10 +26,6 @@ import torch.optim as optim
 
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
-from torch import nn
-
-from torch.utils.data import DataLoader
-from torch import nn
 
 # -------- tracking -------
 import mlflow
@@ -55,11 +49,6 @@ mlflow.set_experiment(experiment_name)
 
 mlflow.pytorch.autolog()
 
-
-# ----------- Plotting configuration ------------
-# number of synthetic plots to generate
-
-
 # Bins for validation
 DIST_DICT= {
     (0,0): [40.00, 54.01],
@@ -69,7 +58,6 @@ DIST_DICT= {
     (1,1): [96.05, 110.06],
     (1,2): [110.06, 124.07],
 }
-
 
 # will display figures?
 SHOW_FIG = False
@@ -237,20 +225,15 @@ def main():
     grads = grads.view(grads.size(0), -1)
     regularizer = ((grads.norm(2, dim=1) - 1) ** 2).mean()
 
-
     print('grads.shape', grads.shape)
     print('regularizer.shape', regularizer.shape)
 
-
     # create new model instances
-
     D = Discriminator().to(device)
     G = Generator(z_size=args.noise_dim).to(device)
 
-
     d_optimizer = optim.Adam(D.parameters(), lr=args.lr, betas=[args.beta1, args.beta2])
     g_optimizer = optim.Adam(G.parameters(), lr=args.lr, betas=[args.beta1, args.beta2])
-
 
     # train the network
     D.train()
@@ -258,7 +241,6 @@ def main():
     d_wloss_ep = np.zeros(args.epochs)
     d_total_loss_ep = np.zeros(args.epochs)
     g_loss_ep = np.zeros(args.epochs)
-
 
     # distnace array
     distv = 60.0*np.ones((num_plots,1))

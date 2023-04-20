@@ -23,7 +23,7 @@ def summarize_conditional_gan(
         n_classes (int): the number of classes
     """
     BS = 128
-    Z_DIM = 100
+    Z_DIM = 1
     SEQ_LENGTH = 1024
 
     gen = cls_gen(SEQ_LENGTH, n_classes, Z_DIM)

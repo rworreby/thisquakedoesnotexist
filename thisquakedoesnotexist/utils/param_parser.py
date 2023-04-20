@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import argparse
 
 
@@ -20,7 +22,7 @@ class ParamParser:
         setup_args.add_argument('--attr_file', type=str, default='thisquakedoesnotexist/data/japan/attributes.csv',
                                 help='Path to attributes data file. Needs to by in .csv format.\
                                     Default: thisquakedoesnotexist/data/japan/attributes.csv"')
-        setup_args.add_argument('--gan-model', type=str, default='thisquakedoesnotexist/condensed_code/gan1d.py',
+        setup_args.add_argument('--model_file', type=str, default='thisquakedoesnotexist/condensed_code/gan1d.py',
                                 help='Path to GAN model architecture file.\
                                     Default: "thisquakedoesnotexist/condensed_code/gan1d.py"')    
 

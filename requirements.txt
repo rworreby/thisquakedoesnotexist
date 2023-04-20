@@ -6,6 +6,7 @@ argon2-cffi-bindings==21.2.0
 arrow==1.2.3
 asttokens==2.2.1
 attrs==22.2.0
+autopep8==2.0.2
 Babel==2.12.1
 backcall==0.2.0
 beautifulsoup4==4.11.2
@@ -120,6 +121,7 @@ ptyprocess==0.7.0
 pure-eval==0.2.2
 py-cpuinfo==9.0.0
 pyarrow==11.0.0
+pycodestyle==2.10.0
 pycparser==2.21
 Pygments==2.14.0
 PyJWT==2.6.0
@@ -169,6 +171,7 @@ tinycss2==1.2.1
 tomli==2.0.1
 torch==1.13.1
 torchaudio==0.13.1
+torchinfo==1.7.2
 torchvision==0.14.1
 tornado==6.2
 tqdm==4.65.0

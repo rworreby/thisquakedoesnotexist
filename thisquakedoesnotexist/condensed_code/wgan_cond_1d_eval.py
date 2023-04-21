@@ -62,11 +62,11 @@ print(f"Running on device: {device}")
 
 
 # setup folders to store experiments
-def init_gan_conf(conf_d):
+def init_gan_conf(conf_d, run_id):
     """
     Output configurations dictionary and create data directory
     """
-    output_dir = conf_d.output_dir
+    output_dir = conf_d.output_dir + "_" + str(run_id)
     model_file = conf_d.model_file
 
     if not os.path.exists(output_dir):
@@ -101,18 +101,39 @@ def log_params_mlflow(params):
     :param params: argument parser instance
     :type params: ParamParser
     """
-    mlflow.log_param("Model file", params.model_file)
-    mlflow.log_param("Data file", params.data_file)
-    mlflow.log_param("Attribute file", params.attr_file)
-    mlflow.log_param("Learning rate", params.lr)
-    mlflow.log_param("Discriminator input size", params.lt)
-    mlflow.log_param("Generator noise dimension", params.noise_dim)
-    mlflow.log_param("GP Lambda", params.gp_lambda)
-    mlflow.log_param("Critic iterations per training cycle ", params.n_critic)
-    mlflow.log_param("Beta 1", params.beta1)
-    mlflow.log_param("Beta 2", params.beta2)
+    mlflow.log_param("Model_file", params.model_file)
+    mlflow.log_param("Data_file", params.data_file)
+    mlflow.log_param("Attribute_file", params.attr_file)
+    mlflow.log_param("Learning_rate", params.lr)
+    mlflow.log_param("Discriminator_input_size", params.lt)
+    mlflow.log_param("Generator_noise_dimension", params.noise_dim)
+    mlflow.log_param("GP_Lambda", params.gp_lambda)
+    mlflow.log_param("Critic_iterations_per_training_cycle ", params.n_critic)
+    mlflow.log_param("Beta_1", params.beta1)
+    mlflow.log_param("Beta_2", params.beta2)
     mlflow.log_param("Epochs", params.epochs)
-    mlflow.log_param("Batch size", params.batch_size)
+    mlflow.log_param("Batch_size", params.batch_size)
+
+
+def log_model_mlflow(D, G, out_dir):
+    with open(f'{out_dir}/generator.txt', 'w') as f:
+        f.write(str(summary(G)))
+    mlflow.log_artifact(f'{out_dir}/generator.txt', "Generator")
+    
+    with open(f'{out_dir}/discriminator.txt', 'w') as f:
+        f.write(str(summary(D)))
+    mlflow.log_artifact(f'{out_dir}/discriminator.txt', "Discriminator")
+    
+    with open(f'{out_dir}/generator_state_dict.txt', 'w') as f:
+        f.write(str(G.state_dict()))
+    mlflow.log_artifact(f'{out_dir}/generator_state_dict.txt', "Generator state dict")
+
+    with open(f'{out_dir}/discriminator_state_dict.txt', 'w') as f:
+        f.write(str(D.state_dict()))
+    mlflow.log_artifact(f'{out_dir}/discriminator_state_dict.txt', "Discriminator state dict")    
+    
+    mlflow.log_param("Generator_num_params", sum(p.numel() for p in G.parameters() if p.requires_grad))
+    mlflow.log_param("Discriminator_num_params", sum(p.numel() for p in D.parameters() if p.requires_grad))
 
 
 def main():
@@ -131,9 +152,11 @@ def main():
     print(args)
 
     log_params_mlflow(args)
+    run_id = mlflow.active_run().info.run_id[:8]
+    print("MLFLOW RUNID: ", run_id)
 
     # Get paths
-    out_dir, model_dir, fig_dir, tt_stats_dir = init_gan_conf(args)
+    out_dir, model_dir, fig_dir, tt_stats_dir = init_gan_conf(args, run_id)
     print(f'Output directory: {out_dir}\nModel directory: {model_dir}')
 
 
@@ -147,11 +170,11 @@ def main():
     # y_normalizer = UnitGaussianNormalizer(y_data)
     # y_data = y_normalizer.encode(y_data)
     # prepare data loader
-    dataset = WaveDatasetDist(data_file=args.data_file, attr_file=args.attr_file, ndist_bins=args.ndist_bins, dt=dt )
+    dataset = WaveDatasetDist(data_file=args.data_file, attr_file=args.attr_file, ndist_bins=args.ndist_bins, dt=dt)
     # create train loader
     train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
 
-    Ntrain = len(dataset)
+    n_train = len(dataset)
 
     # ----- test Loader-----
     x_r, y_r = next(iter(train_loader))
@@ -260,28 +283,10 @@ def main():
     d_optimizer = optim.Adam(D.parameters(), lr=args.lr, betas=[args.beta1, args.beta2])
     g_optimizer = optim.Adam(G.parameters(), lr=args.lr, betas=[args.beta1, args.beta2])
 
-
-    with open(f'{out_dir}/generator.txt', 'w') as f:
-        f.write(str(summary(G)))
-    mlflow.log_artifact(f'{out_dir}/generator.txt', "Generator")
+    log_model_mlflow(D, G, out_dir)
     
-    with open(f'{out_dir}/discriminator.txt', 'w') as f:
-        f.write(str(summary(D)))
-    mlflow.log_artifact(f'{out_dir}/discriminator.txt', "Discriminator")
-    
-    with open(f'{out_dir}/generator_state_dict.txt', 'w') as f:
-        f.write(str(G.state_dict()))
-    mlflow.log_artifact(f'{out_dir}/generator_state_dict.txt', "Generator state dict")
-
-    with open(f'{out_dir}/discriminator_state_dict.txt', 'w') as f:
-        f.write(str(D.state_dict()))
-    mlflow.log_artifact(f'{out_dir}/discriminator_state_dict.txt', "Discriminator state dict")    
-    
-    mlflow.log_param("Generator num params", sum(p.numel() for p in G.parameters() if p.requires_grad))
-    mlflow.log_param("Discriminator num params", sum(p.numel() for p in D.parameters() if p.requires_grad))
-    
-    mlflow.log_param("Generator optimizer", g_optimizer)
-    mlflow.log_param("Discriminator optimizer", d_optimizer)
+    mlflow.log_param("Generator_optimizer", g_optimizer)
+    mlflow.log_param("Discriminator_optimizer", d_optimizer)
 
     # train the network
     D.train()
@@ -398,13 +403,13 @@ def main():
 
         # --------- End training epoch -----------
         # save losses
-        d_wloss_ep[ix_ep] = d_train_wloss/Ntrain
-        d_total_loss_ep[ix_ep] = (d_train_wloss+d_train_gploss)/Ntrain
-        g_loss_ep[ix_ep] = g_train_loss/Ntrain
+        d_wloss_ep[ix_ep] = d_train_wloss/n_train
+        d_total_loss_ep[ix_ep] = (d_train_wloss+d_train_gploss)/n_train
+        g_loss_ep[ix_ep] = g_train_loss/n_train
 
-        mlflow.log_metric(key="d_train_wloss", value=d_train_wloss/Ntrain, step=ix_ep)
-        mlflow.log_metric(key="d_total_loss", value=(d_train_wloss+d_train_gploss)/Ntrain, step=ix_ep)
-        mlflow.log_metric(key="g_train_loss", value=g_train_loss/Ntrain, step=ix_ep)
+        mlflow.log_metric(key="d_train_wloss", value=d_train_wloss/n_train, step=ix_ep)
+        mlflow.log_metric(key="d_total_loss", value=(d_train_wloss+d_train_gploss)/n_train, step=ix_ep)
+        mlflow.log_metric(key="g_train_loss", value=g_train_loss/n_train, step=ix_ep)
 
         # --- AFTER EACH EPOCH ---
         # generate and save sample synthetic images
@@ -433,7 +438,7 @@ def main():
 
     # make lot of losses
     iep = np.arange(args.epochs) + 1.0
-    fig_file = os.path.join(out_dir, f"gan_losses.png")
+    fig_file = os.path.join(out_dir, f"figs/gan_losses.png")
     plt.figure(figsize= (8,6))
     plt.plot(iep, d_wloss_ep, color='C0',label="W Distance")
     plt.plot(iep, d_total_loss_ep, color='C1',label="D Loss")
@@ -444,9 +449,9 @@ def main():
     plt.title("Wasserstein GAN 1D Fourier, 1C")
     plt.savefig(fig_file, format='png')
 
-    mlflow.log_artifacts("thisquakedoesnotexist/data/output/figs", "figs")
-
-    #plt.show()
+    mlflow.log_artifacts(f"{out_dir}/figs", "figs")
+    mlflow.pytorch.save_model(G, f"{out_dir}/model")
+    mlflow.pytorch.log_model(G, f"{out_dir}/model")
 
 
 if __name__ == '__main__':

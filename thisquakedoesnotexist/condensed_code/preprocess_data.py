@@ -16,9 +16,9 @@ def main():
     attribute_file = 'thisquakedoesnotexist/data/japan/attributes.csv'
 
     print('Loading ', input_file, ' ...')
-    f = h5py.File(input_file,'r')
+    #f = h5py.File(input_file, 'r')
 
-    pd.DataFrame(f)
+    #pd.DataFrame(f)
 
     # initial time oaf recording
     time_ini_sec = 5.0

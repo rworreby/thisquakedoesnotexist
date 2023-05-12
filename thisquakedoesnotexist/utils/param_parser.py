@@ -30,6 +30,8 @@ class ParamParser:
         model_args = parser.add_argument_group('Model Parameters')
         model_args.add_argument('--lt', type=int, default=1000, 
                                 help='Size of input to discriminator. Default: 1000')
+        model_args.add_argument('--dt', type=float, default=0.04, 
+                                help='Time step size in data. Default: 0.04 (25 Hz)')
         model_args.add_argument('--noise_dim', type=int, default=100, 
                                 help='Dimension of Gaussian noise. Default: 100')
         model_args.add_argument('--lr', type=float, default=1e-4, 

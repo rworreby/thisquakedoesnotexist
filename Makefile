@@ -90,7 +90,7 @@ dist: clean ## builds source and wheel package
 install: clean ## install the package to the active Python's site-packages
 	python setup.py install
 
-preprocess: clean ## run data preprocessing: downsampling, filtering, filling NaNs
+preprocess: clean ## run data preprocessing: downsampling, filtering, filling NaNs
 	rm -f thisquakedoesnotexist/data/japan/attributes.csv
 	rm -f thisquakedoesnotexist/data/japan/downsampled.h5
 	rm -f thisquakedoesnotexist/data/japan/waveforms.npy
@@ -99,4 +99,7 @@ preprocess: clean ## run data preprocessing: downsampling, filtering, filling N
 train: clean ## train the conditional GAN model
 	./thisquakedoesnotexist/condensed_code/run_cwgan_1d.sh
 
-pipeline: preprocess train ## runs the preprocessor and training steps successively
+pipeline: preprocess train ## runs the preprocessor and training steps successively
+
+train_file: clean ## execute (train) runfile given as CLA
+	./thisquakedoesnotexist/condensed_code/$(file)

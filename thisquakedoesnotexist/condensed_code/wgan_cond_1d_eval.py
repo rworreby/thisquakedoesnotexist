@@ -159,126 +159,30 @@ def main():
     out_dir, model_dir, fig_dir, tt_stats_dir = init_gan_conf(args, run_id)
     print(f'Output directory: {out_dir}\nModel directory: {model_dir}')
 
-
     # Dataset sampling intervals
     dt = 0.04
     t_max = dt * args.lt
 
-    # # apply normalizers to dataset
-    # x_normalizer = UnitGaussianNormalizer(x_data)
-    # x_data = x_normalizer.encode(x_data)
-    # y_normalizer = UnitGaussianNormalizer(y_data)
-    # y_data = y_normalizer.encode(y_data)
     # prepare data loader
     dataset = WaveDatasetDist(data_file=args.data_file, attr_file=args.attr_file, ndist_bins=args.ndist_bins, dt=dt)
     # create train loader
     train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
 
     n_train = len(dataset)
-
-    # ----- test Loader-----
+    
     x_r, y_r = next(iter(train_loader))
-    print('shapes x_r, y_r: ', x_r.shape, y_r.shape)
     Nb = x_r.size(0)
-
-
-    fig_file = os.path.join(fig_dir, 'waves_real.png')
-    stl = "Real Accelerograms 1C"
-    x_r = x_r.squeeze()
-    plot_waves_1C(x_r, dt, t_max=t_max, show_fig=True, fig_file=fig_file,stitle=stl, color='C0')
-
-    # Test random field dim=1
-    # Parameter for gaussian random field
+    num_plots = Nb
 
     grf = rand_noise(1, args.noise_dim, device=device)
     z = grf.sample(args.nplt_max)
     print("z shape: ", z.shape)
     z = z.squeeze()
     z = z.detach().cpu()
-    # Make plot
-    fig_file = os.path.join(fig_dir, 'rand_1C.png')
-    stl = f"Random Gaussian Noise"
-    plot_waves_1C(z, dt, t_max=4.0, show_fig=True, fig_file=fig_file,stitle=stl, color='C4')
-
-
-    # ----- test Discriminator-----
-    x_r, vc_r = next(iter(train_loader))
-    # get discriminator
-    Nb = x_r.size(0)
-    x_r = x_r.to(device)
-    vc_r = vc_r.to(device)
-    print('shapes x_r: ', x_r.shape)
-    D = Discriminator().to(device)
-    nn_params = sum(p.numel() for p in D.parameters() if p.requires_grad)
-    print("Number discriminator parameters: ", nn_params)
-    print(D)
-    x_d = D(x_r, vc_r)
-    print("D(x_r, vc_r) shape: ", x_d.shape)
-
-
-    #----- Test generator -----------
-    num_plots = Nb
-    G = Generator(z_size=args.noise_dim).to(device)
-    print(G)
-    nn_params = sum(p.numel() for p in G.parameters() if p.requires_grad)
-    print("Number Generator parameters: ", nn_params)
-    z = grf.sample(num_plots)
-    print("z shape: ", z.shape)
-    # get random batch of conditional variables
-    vc_g = dataset.get_rand_cond_v(num_plots)
-    vc_g = vc_g.to(device)
-    x_g = G(z, vc_g)
-    print('G(z) shape: ', x_g.shape)
-    x_g = x_g.squeeze(1)
-    # make plot
-    fig_file = os.path.join(fig_dir, 'syn_test_onepass.png')
-    stl = "Generator one pass"
-    x_g = x_g.squeeze()
-    x_g = x_g.detach().cpu()
-    plot_waves_1C(x_g, dt, t_max=t_max, show_fig=True, fig_file=fig_file,stitle=stl, color='C1')
-
-
-    x_r, vc_r = next(iter(train_loader))
-    # get discriminator
-    Nb = x_r.size(0)
-    x_r = x_r.to(device)
-    vc_r = vc_r.to(device)
-
-    z = grf.sample(Nb)
-    x_g = G(z,vc_r)
-
-    # # ----- test gradient penalty -----
-    # random alpha
-    alpha = torch.rand(Nb, 1, 1, device=device)
-    # Get random interpolation between real and fake samples
-    # Xp = (alpha * real_wfs + ((1 - alpha) * fake_wfs)).requires_grad_(True)
-    Xp = (alpha * x_r + ((1 - alpha) * x_g)).requires_grad_(True)
-    # apply dicriminator
-    D_xp = D(Xp,vc_r)
-    #Xout = Variable(Tensor(Nsamp,1).fill_(1.0), requires_grad=False)
-    Xout = Variable(torch.ones(Nb, 1, device=device), requires_grad=False)
-    # Get gradient w.r.t. interpolates
-    grads = torch.autograd.grad(
-        outputs=D_xp,
-        inputs=Xp,
-        grad_outputs=Xout,
-        create_graph=True,
-        retain_graph=True,
-        only_inputs=True,
-    )[0]
-    grads = grads.view(grads.size(0), -1)
-    regularizer = ((grads.norm(2, dim=1) - 1) ** 2).mean()
-
-    print('grads.shape', grads.shape)
-    print('regularizer.shape', regularizer.shape)
 
     # create new model instances
     D = Discriminator().to(device)
     G = Generator(z_size=args.noise_dim).to(device)
-
-    # TODO: Check if summarize_conditional_gan can be changed to fit \
-    # the layout of our GAN 
-    # tracking.summarize_conditional_gan(Generator, Discriminator, 1)
 
     d_optimizer = optim.Adam(D.parameters(), lr=args.lr, betas=[args.beta1, args.beta2])
     g_optimizer = optim.Adam(G.parameters(), lr=args.lr, betas=[args.beta1, args.beta2])
@@ -296,13 +200,11 @@ def main():
     g_loss_ep = np.zeros(args.epochs)
 
     # distance array
-    distv = 60.0*np.ones((num_plots,1))
+    distance = 60.0
+    distv = distance * np.ones((Nb, 1))
     distv = dataset.fn_dist_scale(distv)
     distv = torch.from_numpy(distv).float()
     distv = distv.to(device)
-
-    # with mlflow.start_run(nested=True):
-    #     print('artifact uri:', mlflow.get_artifact_uri())
 
     for ix_ep in range(args.epochs):
         # store train losses
@@ -403,13 +305,13 @@ def main():
 
         # --------- End training epoch -----------
         # save losses
-        d_wloss_ep[ix_ep] = d_train_wloss/n_train
-        d_total_loss_ep[ix_ep] = (d_train_wloss+d_train_gploss)/n_train
-        g_loss_ep[ix_ep] = g_train_loss/n_train
+        d_wloss_ep[ix_ep] = d_train_wloss / n_train
+        d_total_loss_ep[ix_ep] = (d_train_wloss + d_train_gploss) / n_train
+        g_loss_ep[ix_ep] = g_train_loss / n_train
 
-        mlflow.log_metric(key="d_train_wloss", value=d_train_wloss/n_train, step=ix_ep)
-        mlflow.log_metric(key="d_total_loss", value=(d_train_wloss+d_train_gploss)/n_train, step=ix_ep)
-        mlflow.log_metric(key="g_train_loss", value=g_train_loss/n_train, step=ix_ep)
+        mlflow.log_metric(key="d_train_wloss", value=d_wloss_ep[ix_ep], step=ix_ep)
+        mlflow.log_metric(key="d_total_loss", value=d_total_loss_ep[ix_ep], step=ix_ep)
+        mlflow.log_metric(key="g_train_loss", value=g_loss_ep[ix_ep], step=ix_ep)
 
         # --- AFTER EACH EPOCH ---
         # generate and save sample synthetic images
@@ -419,22 +321,20 @@ def main():
         x_g = G(z,distv)
         x_g = x_g.squeeze()
         x_g = x_g.detach().cpu()
-        fig_file = os.path.join(fig_dir, f"syn_ep_{ix_ep}.png")
-        stl = f"Epoch={ix_ep}, dist = 60 km"
-        plot_waves_1C(x_g, dt, t_max=t_max, show_fig=False, fig_file=fig_file,stitle=stl, color='C1')
+        fig_file = os.path.join(fig_dir, f"syn_ep_{ix_ep:03}.png")
+        stl = f"Epoch: {ix_ep}, dist = {distance} km"
+        plot_waves_1C(x_g, dt, t_max=t_max, show_fig=False, fig_file=fig_file, stitle=stl, color='C1')
         # store model
-        fmodel = os.path.join(model_dir, 'model_G_epoch_'+str(ix_ep)+'.pth')
+        fmodel = os.path.join(model_dir, f'model_G_epoch_{ix_ep:03}.pth')
         torch.save({'state_dict': G.state_dict()}, fmodel)
 
         # plot validation statistics
         fig_file = os.path.join(tt_stats_dir, f"val_plots_{ix_ep}.png")
         
-        # TODO: Fix plotting
-        # make_val_figs_all(G, grf, dataset, DIST_DICT, fig_file, figsize=(9, 36), Ni=2, Nj=3, iD1=0, iD2=1, fontsize=9, device=device)
-
         # back to train mode
         G.train()
 
+        mlflow.log_artifacts(f"{out_dir}/figs", "figs")
 
     # make lot of losses
     iep = np.arange(args.epochs) + 1.0
@@ -449,10 +349,8 @@ def main():
     plt.title("Wasserstein GAN 1D Fourier, 1C")
     plt.savefig(fig_file, format='png')
 
-    mlflow.log_artifacts(f"{out_dir}/figs", "figs")
     mlflow.pytorch.save_model(G, f"{out_dir}/model")
     mlflow.pytorch.log_model(G, f"{out_dir}/model")
-
 
 if __name__ == '__main__':
     main()

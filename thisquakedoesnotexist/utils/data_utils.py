@@ -33,9 +33,9 @@ def make_vc_bins(v, bins, n_decimals=2):
     # 1. find the correct bin index for each value in the array
     iv = np.digitize(v, bins) - 1
     # get average values and counts
-    Nb= len(bins)-1
-    m_bins = np.zeros((Nb),dtype=float)
-    cnt_bins = np.zeros((Nb),dtype=float)
+    Nb = len(bins) - 1
+    m_bins = np.zeros((Nb), dtype=float)
+    cnt_bins = np.zeros((Nb), dtype=float)
 
     for ib in range(Nb):
         ix = iv==ib
@@ -88,7 +88,7 @@ class WaveDatasetDist(Dataset):
         x_data = np.nan_to_num(x_data)
 
         # keep only second horizontal componenet
-        x_data = x_data[:,1,:]
+        x_data = x_data[:, 1, :]
         print("x_data shape: ", x_data.shape)
         print("x_data min: ", x_data.min())
         print("x_data max: ", x_data.max())
@@ -96,7 +96,7 @@ class WaveDatasetDist(Dataset):
         # -------------- set input variables ----------------
         self.df = df
         # create scaling functions
-        dist = np.array(df['dist']).reshape(-1,1)
+        dist = np.array(df['dist']).reshape(-1, 1)
         #mag = np.array(df['mag']).reshape(-1,1)
         # sampling rate
         self.dt = dt
@@ -121,7 +121,7 @@ class WaveDatasetDist(Dataset):
         # create conditional variables
         vc = distv
         #vc = np.concatenate( (distv, magv, ), axis=1)
-        print('vc[:,0] min: ',vc[:,0].min())
+        print('vc[:,0] min: ', vc[:,0].min())
         #print('vc[:,1] min: ',vc[:,1].min())
 
 
@@ -154,4 +154,4 @@ class WaveDatasetDist(Dataset):
         return self.x_data.size(0)
 
     def __getitem__(self, idx):
-        return ( self.x_data[idx,:], self.vc[idx, :] )
+        return ( self.x_data[idx, :], self.vc[idx, :] )

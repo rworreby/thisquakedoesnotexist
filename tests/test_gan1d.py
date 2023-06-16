@@ -7,7 +7,7 @@ import torch
 
 from thisquakedoesnotexist.condensed_code import gan1d
 from thisquakedoesnotexist.utils import random_fields
-from thisquakedoesnotexist.utils.data_utils import WaveDatasetDist, DataLoader
+from thisquakedoesnotexist.utils.data import WaveDatasetDist, DataLoader
 
 
 @pytest.fixture

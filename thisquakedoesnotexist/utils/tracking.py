@@ -1,39 +1,58 @@
 #!/usr/bin/env python3
 
-"""File based on ML4ITS tracking setup:
-https://github.com/ML4ITS/synthetic-data/blob/main/synthetic_data/mlops/tools/summary.py
-"""
-
-from typing import Callable, Type
-
-from torch import nn, randint, randn
+import mlflow
 from torchinfo import summary
 
 
-def summarize_conditional_gan(
-    cls_gen: Type[nn.Module], cls_dis: Type[nn.Module], n_classes: int
-) -> None:
-    """Runs a forward pass on the generator and discriminator, and calculates the internal
-    states. Will output the layer names and shapes, as well as the number of parameters and
-    the total memory usage of between passes.
+def log_params_mlflow(params):
+    """log_params_mlflow add config parameters to mlflow tracking. 
 
-    Args:
-        cls_gen (torch.nn.Module): the generator object
-        cls_dis (torch.nn.Module): the discriminator object
-        n_classes (int): the number of classes
+    :param params: argument parser instance
+    :type params: ParamParser
     """
-    BS = 128
-    Z_DIM = 1
-    SEQ_LENGTH = 1024
+    mlflow.log_param("Model_file", params.model_file)
+    mlflow.log_param("Data_file", params.data_file)
+    mlflow.log_param("Attribute_file", params.attr_file)
+    mlflow.log_param("Learning_rate", params.lr)
+    mlflow.log_param("Discriminator_input_size", params.lt)
+    mlflow.log_param("Dt", params.dt)
+    mlflow.log_param("Generator_noise_dimension", params.noise_dim)
+    mlflow.log_param("GP_Lambda", params.gp_lambda)
+    mlflow.log_param("Critic_iterations_per_training_cycle ", params.n_critic)
+    mlflow.log_param("Beta_1", params.beta1)
+    mlflow.log_param("Beta_2", params.beta2)
+    mlflow.log_param("Epochs", params.epochs)
+    mlflow.log_param("Batch_size", params.batch_size)
 
-    gen = cls_gen(SEQ_LENGTH, n_classes, Z_DIM)
-    dis = cls_dis(SEQ_LENGTH, n_classes)
 
-    dataG = randn(BS, Z_DIM)
-    dataD = randn(BS, SEQ_LENGTH)
+def log_model_mlflow(D, G, out_dir):
+    """log_model_mlflow _summary_
 
-    input_dataG = dataG, randint(0, n_classes, (BS,))
-    input_dataD = dataD, randint(0, n_classes, (BS,))
+    _extended_summary_
 
-    summary(gen, input_data=input_dataG)  # , input_data=input_data)
-    summary(dis, input_data=input_dataD)  # , input_data=input_data)
+    :param D: the discriminator object
+    :type D: Discriminator
+    :param G: the generator object 
+    :type G: Generator
+    :param out_dir: artifact folder path where mlflow is logging the artifacts.
+    :type out_dir: string
+    """
+
+    with open(f'{out_dir}/generator.txt', 'w') as f:
+        f.write(str(summary(G)))
+    mlflow.log_artifact(f'{out_dir}/generator.txt', "Generator")
+    
+    with open(f'{out_dir}/discriminator.txt', 'w') as f:
+        f.write(str(summary(D)))
+    mlflow.log_artifact(f'{out_dir}/discriminator.txt', "Discriminator")
+    
+    with open(f'{out_dir}/generator_state_dict.txt', 'w') as f:
+        f.write(str(G.state_dict()))
+    mlflow.log_artifact(f'{out_dir}/generator_state_dict.txt', "Generator state dict")
+
+    with open(f'{out_dir}/discriminator_state_dict.txt', 'w') as f:
+        f.write(str(D.state_dict()))
+    mlflow.log_artifact(f'{out_dir}/discriminator_state_dict.txt', "Discriminator state dict")    
+    
+    mlflow.log_param("Generator_num_params", sum(p.numel() for p in G.parameters() if p.requires_grad))
+    mlflow.log_param("Discriminator_num_params", sum(p.numel() for p in D.parameters() if p.requires_grad))

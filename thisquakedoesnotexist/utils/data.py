@@ -3,6 +3,7 @@ import numpy as np
 from torch.utils.data import Dataset, DataLoader
 import pandas as pd
 
+
 def make_ibins(v, nbins):
     """
     :param v: data
@@ -61,9 +62,9 @@ def make_rescale(v):
     v_min = v.min()
     v_max = v.max()
     def rescale(x):
-        dv = v_max-v_min
+        dv = v_max - v_min
         # rescale to [0,1]
-        xn = (x-v_min) / dv
+        xn = (x - v_min) / dv
         return xn
     # rescale to [-1,1]
     #vn = 2.0 * vn - 1.0
@@ -78,17 +79,31 @@ class WaveDatasetDist(Dataset):
         print('Shape attribute file: ', df.shape)
 
         print('normalizing data ...')
-        wfs_norm = np.max(np.abs(x_data), axis=2)
+        wfs_norm = np.max(np.abs(x_data), axis=1)
+        self.wfs_norm = wfs_norm
+        
+        # for braadcasting
+        wfs_norm = wfs_norm[:, np.newaxis]
+        
+        # apply normalization
+        x_data = x_data / wfs_norm
+
+        """
+        print('normalizing data ...')
+        wfs_norm = np.max(np.abs(x_data), axis=1)
+        
         # for braadcasting
         wfs_norm = wfs_norm[:, :, np.newaxis]
         # apply normalization
         x_data = x_data / wfs_norm
 
+        # keep only second horizontal componenet
+        x_data = x_data[:, 1, :]
+        """
+        
         # fill nan with 0.0
         x_data = np.nan_to_num(x_data)
 
-        # keep only second horizontal componenet
-        x_data = x_data[:, 1, :]
         print("x_data shape: ", x_data.shape)
         print("x_data min: ", x_data.min())
         print("x_data max: ", x_data.max())
@@ -97,16 +112,19 @@ class WaveDatasetDist(Dataset):
         self.df = df
         # create scaling functions
         dist = np.array(df['dist']).reshape(-1, 1)
-        #mag = np.array(df['mag']).reshape(-1,1)
+        mag = np.array(df['mag']).reshape(-1,1)
+        
         # sampling rate
         self.dt = dt
 
         # get functions
         self.fn_dist_scale = make_rescale(dist)
-        #self.fn_mag_scale = make_rescale(mag)
+        # self.fn_mag_scale = make_rescale(mag)
 
         # define bins
-        #magv, m_bins, cnt_bins = make_vc_bins(mag, mag_bins)
+        # nmag_bins = ndist_bins
+        # mag_bins = make_ibins(mag, nmag_bins)
+        # magv, m_bins, cnt_bins = make_vc_bins(mag, mag_bins)
 
         # distance
         dist_bins = make_ibins(dist, ndist_bins)
@@ -117,12 +135,12 @@ class WaveDatasetDist(Dataset):
 
         # create array for conditional variables
         distv = self.fn_dist_scale(distv)
-        #magv = self.fn_mag_scale(magv)
+        # magv = self.fn_mag_scale(magv)
         # create conditional variables
         vc = distv
-        #vc = np.concatenate( (distv, magv, ), axis=1)
-        print('vc[:,0] min: ', vc[:,0].min())
-        #print('vc[:,1] min: ',vc[:,1].min())
+        vc = np.concatenate( (distv, ), axis=1)
+        print('vc[:,0] min: ', vc[:, 0].min())
+        # print('vc[:,1] min: ',vc[:, 1].min())
 
 
         # convert to tensors

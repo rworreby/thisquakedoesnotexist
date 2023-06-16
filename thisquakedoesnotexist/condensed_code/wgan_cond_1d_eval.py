@@ -1,68 +1,43 @@
 #!/usr/bin/env python3
 
+"""Uses pointwise encoder using unit gaussian
+ NO TANH activation at the end of generator model
+ W GAN implementation."""
+
 import os
 import json
 import shutil
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
-
-# ------------ USES POISSON 2D DATA SET ---------------------
-"""
-    Uses pointwise encoder using unit gaussian
-    NO TANH activation at the end of generator model
-    W GAN implementation
-   
-"""
-
-# ---------------------------------------------
-import matplotlib.pyplot as plt
-import numpy as np
-import torch
 from argparse import ArgumentParser
-from importlib import reload
-# ------ optimizers ------
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import torch
 import torch.optim as optim
-from torchinfo import summary
-
-# ------ optimizers ------
-
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
-
-# -------- tracking -------
 import mlflow
 
-# ---- custom utilities ---
-from thisquakedoesnotexist.utils.data_utils import WaveDatasetDist
-from thisquakedoesnotexist.utils.random_fields import *
+from thisquakedoesnotexist.utils.data import WaveDatasetDist
+from thisquakedoesnotexist.utils.random_fields import rand_noise
 from thisquakedoesnotexist.utils.utils import *
 from thisquakedoesnotexist.utils.param_parser import ParamParser
-from thisquakedoesnotexist.utils import tracking
+from thisquakedoesnotexist.utils.plotting import plot_syn_data_grid, plot_syn_data_single
+from thisquakedoesnotexist.utils.plotting import plot_waves_1C
+from thisquakedoesnotexist.utils.tracking import log_model_mlflow, log_params_mlflow
 from thisquakedoesnotexist.condensed_code.gan1d import Generator, Discriminator
-# from thisquakedoesnotexist.plotting.fn_plot import *
 
-
-# Bins for validation
-DIST_DICT= {
-    (0,0): [40.00, 54.01],
-    (0,1): [54.01, 68.03],
-    (0,2): [68.03, 82.04],
-    (1,0): [82.04, 96.05],
-    (1,1): [96.05, 110.06],
-    (1,2): [110.06, 124.07],
-}
-
-# will display figures?
 SHOW_FIG = False
+sns.set()
 
-# device to use
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
 print(f"Running on device: {device}")
 
 
-# setup folders to store experiments
-def init_gan_conf(conf_d, run_id):
+def set_up_folders(conf_d, run_id):
     """
     Output configurations dictionary and create data directory
     """
@@ -71,14 +46,17 @@ def init_gan_conf(conf_d, run_id):
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-
-    fname = os.path.join(output_dir, 'config_d.json')
     
     # create diretory for models
     models_dir = os.path.join(output_dir, 'models')
     if not os.path.exists(models_dir):
         os.makedirs(models_dir)
+    
     # create directory for figures
+    syn_data_dir = os.path.join(output_dir, 'syn_data')
+    if not os.path.exists(syn_data_dir):
+        os.makedirs(syn_data_dir)
+
     fig_dir = os.path.join(output_dir, 'figs')
     if not os.path.exists(fig_dir):
         os.makedirs(fig_dir)
@@ -95,72 +73,59 @@ def init_gan_conf(conf_d, run_id):
     return output_dir, models_dir, fig_dir, tt_stats_dir
 
 
-def log_params_mlflow(params):
-    """log_params_mlflow add parameters to mlflow tracking. 
-
-    :param params: argument parser instance
-    :type params: ParamParser
-    """
-    mlflow.log_param("Model_file", params.model_file)
-    mlflow.log_param("Data_file", params.data_file)
-    mlflow.log_param("Attribute_file", params.attr_file)
-    mlflow.log_param("Learning_rate", params.lr)
-    mlflow.log_param("Discriminator_input_size", params.lt)
-    mlflow.log_param("Generator_noise_dimension", params.noise_dim)
-    mlflow.log_param("GP_Lambda", params.gp_lambda)
-    mlflow.log_param("Critic_iterations_per_training_cycle ", params.n_critic)
-    mlflow.log_param("Beta_1", params.beta1)
-    mlflow.log_param("Beta_2", params.beta2)
-    mlflow.log_param("Epochs", params.epochs)
-    mlflow.log_param("Batch_size", params.batch_size)
+def evaluate_model(G, n_waveforms, n_dist_bins, dist, dataset, noise_dim, lt, dt, fig_dir):
+    samples = get_syntetic_data(G, n_waveforms, n_dist_bins, dist, dataset, noise_dim, lt, dt)
+    plot_syn_data_grid(samples, dist, dt, fig_dir)
+    plot_syn_data_single(samples, dist, dt, lt, fig_dir)
 
 
-def log_model_mlflow(D, G, out_dir):
-    with open(f'{out_dir}/generator.txt', 'w') as f:
-        f.write(str(summary(G)))
-    mlflow.log_artifact(f'{out_dir}/generator.txt', "Generator")
-    
-    with open(f'{out_dir}/discriminator.txt', 'w') as f:
-        f.write(str(summary(D)))
-    mlflow.log_artifact(f'{out_dir}/discriminator.txt', "Discriminator")
-    
-    with open(f'{out_dir}/generator_state_dict.txt', 'w') as f:
-        f.write(str(G.state_dict()))
-    mlflow.log_artifact(f'{out_dir}/generator_state_dict.txt', "Generator state dict")
+def get_syntetic_data(G, n_waveforms, n_dist_bins, dist, dataset, noise_dim, lt, dt):
+    # Create some extra waveforms to filter out mode collapse
+    samples = 2 * n_waveforms
 
-    with open(f'{out_dir}/discriminator_state_dict.txt', 'w') as f:
-        f.write(str(D.state_dict()))
-    mlflow.log_artifact(f'{out_dir}/discriminator_state_dict.txt', "Discriminator state dict")    
-    
-    mlflow.log_param("Generator_num_params", sum(p.numel() for p in G.parameters() if p.requires_grad))
-    mlflow.log_param("Discriminator_num_params", sum(p.numel() for p in D.parameters() if p.requires_grad))
+    grf = rand_noise(1, noise_dim, device=device)
+    distv = 60.0 * np.ones((samples, 1))
+    distv = dataset.fn_dist_scale(distv)
+    distv = torch.from_numpy(distv).float()
+    distv = distv.to(device)
+
+    z = grf.sample(samples)
+    x_g = G(z, distv)
+    x_g = x_g.squeeze()
+    x_g = x_g.detach().cpu()
+
+    good_samples = []
+    for wf in x_g:
+        tv = np.sum(np.abs(np.diff(wf)))
+        # If generator sample fails to generate a seismic signal, skip it
+        # threshold value is emperically chosen 
+        if tv < 40:
+            continue
+        good_samples.append(wf)
+    return good_samples[:n_waveforms]
 
 
 def main():
     tracking_uri = '/home/rworreby/thisquakedoesnotexist/mlruns/'
     mlflow.set_tracking_uri(tracking_uri)
-
     print("Tracking URI: ", mlflow.tracking.get_tracking_uri())
 
     experiment_name = "Florez_CGAN"
     print("Experiment name: ", experiment_name)
     mlflow.set_experiment(experiment_name)
     
-
     args = None
     args = ParamParser.parse_args(args=args)
     print(args)
 
     log_params_mlflow(args)
     run_id = mlflow.active_run().info.run_id[:8]
-    print("MLFLOW RUNID: ", run_id)
+    print("MLFlow run ID: ", run_id)
 
-    # Get paths
-    out_dir, model_dir, fig_dir, tt_stats_dir = init_gan_conf(args, run_id)
+    out_dir, model_dir, fig_dir, tt_stats_dir = set_up_folders(args, run_id)
     print(f'Output directory: {out_dir}\nModel directory: {model_dir}')
 
-    # Dataset sampling intervals
-    dt = 0.04
+    dt = args.dt
     t_max = dt * args.lt
 
     # prepare data loader
@@ -171,10 +136,12 @@ def main():
     n_train = len(dataset)
     
     x_r, y_r = next(iter(train_loader))
-    Nb = x_r.size(0)
-    num_plots = Nb
+    n_samples = x_r.size(0)
+    n_plots = n_samples
 
-    grf = rand_noise(1, args.noise_dim, device=device)
+    n_cond_var = 1
+
+    grf = rand_noise(n_cond_var, args.noise_dim, device=device)
     z = grf.sample(args.nplt_max)
     print("z shape: ", z.shape)
     z = z.squeeze()
@@ -188,34 +155,30 @@ def main():
     g_optimizer = optim.Adam(G.parameters(), lr=args.lr, betas=[args.beta1, args.beta2])
 
     log_model_mlflow(D, G, out_dir)
-    
     mlflow.log_param("Generator_optimizer", g_optimizer)
     mlflow.log_param("Discriminator_optimizer", d_optimizer)
 
-    # train the network
     D.train()
     G.train()
     d_wloss_ep = np.zeros(args.epochs)
     d_total_loss_ep = np.zeros(args.epochs)
     g_loss_ep = np.zeros(args.epochs)
 
-    # distance array
     distance = 60.0
-    distv = distance * np.ones((Nb, 1))
+    distv = distance * np.ones((n_samples, 1))
     distv = dataset.fn_dist_scale(distv)
     distv = torch.from_numpy(distv).float()
     distv = distv.to(device)
 
     for ix_ep in range(args.epochs):
-        # store train losses
         d_train_wloss = 0.0
         d_train_gploss = 0.0
         g_train_loss = 0.0
-        # counter for critic iterations
         n_critic = 0
+        
         for batch_i, (x_r, vc_r) in enumerate(train_loader):
             # current batch size
-            Nb = x_r.size(0)
+            n_samples = x_r.size(0)
             # --------  TRAIN THE DISCRIMINATOR --------
             # 1. Move data to GPU
             x_r = x_r.to(device)
@@ -224,19 +187,21 @@ def main():
             # clear gradients
             d_optimizer.zero_grad()
             # 2. Get fake data
-            # Gaussian ranfom field
-            z = grf.sample(Nb)
+            # Gaussian random field
+            z = grf.sample(n_samples)
+            
+            # breakpoint()
+
             x_g = G(z, vc_r)
             # 3. Compute gradient penalty term
-            # ---------- GRADIENT PENALTY
-            # random alpha
-            alpha = torch.rand(Nb, 1, 1, device=device)
+         
+            alpha = torch.rand(n_samples, 1, 1, device=device)
             # Get random interpolation between real and fake samples
             Xp = (alpha * x_r + ((1 - alpha) * x_g)).requires_grad_(True)
-            # apply dicriminator
+            # apply discriminator
             D_xp = D(Xp, vc_r)
             # Jacobian related variable
-            Xout = Variable(torch.ones(Nb,1, device=device), requires_grad=False)
+            Xout = Variable(torch.ones(n_samples,1, device=device), requires_grad=False)
             # Get gradient w.r.t. interpolates
             grads = torch.autograd.grad(
                 outputs=D_xp,
@@ -248,7 +213,7 @@ def main():
             )[0]
             grads = grads.view(grads.size(0), -1)
             # 4. Compute losses
-            d_gp_loss = args.gp_lambda * ((grads.norm(2, dim=1) - 1) ** 2).mean()
+            d_gp_loss = args.gp_lambda * ((grads.norm(2, dim=1) - 1.0) ** 2).mean()
             d_w_loss = -torch.mean(D(x_r, vc_r)) + torch.mean(D(x_g, vc_r))
             d_loss = d_w_loss + d_gp_loss
 
@@ -272,14 +237,14 @@ def main():
                 g_optimizer.zero_grad()
 
                 # 1. Generate fake data with fake data
-                z = grf.sample(Nb)
-                vc_g = dataset.get_rand_cond_v(Nb)
+                z = grf.sample(n_samples)
+                vc_g = dataset.get_rand_cond_v(n_samples)
                 vc_g = vc_g.to(device)
 
                 x_g = G(z, vc_g)
                 # 2. calculate loss
                 g_loss = -torch.mean( D(x_g, vc_g) )
-                # The wights of the generator are optimized with respect
+                # The weights of the generator are optimized with respect
                 # to the discriminator loss
                 # the generator is trained to produce data that will be classified
                 # by the discriminator as "real"
@@ -298,7 +263,7 @@ def main():
                 ### --------------  END GENERATOR STEP ------------------------
 
             # Print some loss stats
-            if (batch_i % args.print_freq==0):
+            if (batch_i % args.print_freq == 0):
                 # print discriminator and generator loss
                 print('Epoch [{:5d}/{:5d}] | d_tot_loss: {:6.4f} | g_wloss: {:6.4f}'.format(
                     ix_ep + 1, args.epochs, d_loss.item(), d_w_loss.item()))
@@ -317,13 +282,13 @@ def main():
         # generate and save sample synthetic images
         # eval mode for generating samples
         G.eval()
-        z = grf.sample(num_plots)
+        z = grf.sample(n_plots)
         x_g = G(z,distv)
         x_g = x_g.squeeze()
         x_g = x_g.detach().cpu()
-        fig_file = os.path.join(fig_dir, f"syn_ep_{ix_ep:03}.png")
-        stl = f"Epoch: {ix_ep}, dist = {distance} km"
-        plot_waves_1C(x_g, dt, t_max=t_max, show_fig=False, fig_file=fig_file, stitle=stl, color='C1')
+        fig_file = os.path.join(f'{out_dir}/syn_data', f"syn_ep_{ix_ep+1:03}.png")
+        stl = f"Epoch: {ix_ep+1}, dist = {distance} km"
+        plot_waves_1C(x_g, dt, ylim=(-1, 1), t_max=t_max, show_fig=False, fig_file=fig_file, stitle=stl)
         # store model
         fmodel = os.path.join(model_dir, f'model_G_epoch_{ix_ep:03}.pth')
         torch.save({'state_dict': G.state_dict()}, fmodel)
@@ -334,10 +299,10 @@ def main():
         # back to train mode
         G.train()
 
-        mlflow.log_artifacts(f"{out_dir}/figs", "figs")
+        mlflow.log_artifacts(f"{out_dir}/syn_data", "syn_data")
 
     # make lot of losses
-    iep = np.arange(args.epochs) + 1.0
+    iep = np.arange(1, 1 + args.epochs)
     fig_file = os.path.join(out_dir, f"figs/gan_losses.png")
     plt.figure(figsize= (8,6))
     plt.plot(iep, d_wloss_ep, color='C0',label="W Distance")
@@ -352,5 +317,11 @@ def main():
     mlflow.pytorch.save_model(G, f"{out_dir}/model")
     mlflow.pytorch.log_model(G, f"{out_dir}/model")
 
+    n_waveforms = 72 * 5
+    dist = 60
+
+    evaluate_model(G, n_waveforms, args.ndist_bins, dist, dataset, args.noise_dim, args.lt, args.dt, fig_dir)
+    mlflow.log_artifacts(f"{out_dir}/figs", "figs")
+    
 if __name__ == '__main__':
     main()

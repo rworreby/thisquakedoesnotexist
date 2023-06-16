@@ -6,7 +6,7 @@ import pandas as pd
 
 
 class Preprocessor:
-    """ Simple class to downsample a fileset from a HDF5 file.
+    """ Simple class to downsample a data set from a HDF5 file.
 
     If the dimension is 1, downsampling is done on the first dimension.
     If the dimension is 3, downsampling is done on the second dimension.
@@ -72,13 +72,17 @@ class Preprocessor:
 
             begin = int(self.burnin * self.sample_rate * factor)
             end = int(self.duration * self.sample_rate * factor + begin)
+
+            # all other attributes
             if dimension == 1:
                 self.data[val] = self.h5_file[val][begin:end:factor]
+            # magnitudes
             elif dimension == 2:
                 self.data[val] = self.h5_file[val][:, threshold_start:threshold_end]
+            # waveforms
             elif dimension == 3:
                 self.data[val] = \
-                    np.array(self.h5_file[val][:, begin:end:factor, threshold_start:threshold_end]).transpose((2, 0, 1))
+                    np.array(self.h5_file[val][1, begin:end:factor, threshold_start:threshold_end]).transpose((1, 0))
             else:
                 print(f"Nothing to be done for {val}, skipping downsampling.")
                 self.data[val] = self.h5_file[val][:, :]
@@ -92,21 +96,16 @@ class Preprocessor:
     def compute_pga(self):
         wfs_p = np.abs(self.data['waveforms'])
         
-        # Calculate the max amplitude for each trace
-        wa = np.max(wfs_p, axis=2)
-        pga_v = np.max(wa, axis=1)
+        # Calculate the max amplitude
+        wa = np.max(wfs_p, axis=1)
         
-        self.data['pga_v'] = pga_v.reshape(1, -1)
+        self.data['pga_v'] = wa.reshape(1, -1)
         print(self.data.keys())
 
 
-    def save_to_files(self):
+    def select_shallow_crustal(self):
         n_obs = np.array(self.data['waveforms']).shape[0]
-        
-        print(self.data.keys())
-        for key in self.data.keys():
-            print(self.data[key].shape)
-        
+
         df = pd.DataFrame({
             'i_wf': np.arange(n_obs), # index for waveform
             'dist': self.data['hypocentral_distance'][0, :],  
@@ -120,8 +119,14 @@ class Preprocessor:
             'pga_v': self.data['pga_v'][0, :],
         })
 
-        df.to_csv(self.attributes_file, index=False)
+        # select only shallow crustal events
+        df = df.loc[(df['is_shallow_crustal'] != 0)].reset_index(drop=True)
+        df_index = df['i_wf'].values
 
-        np.save(self.waveforms_file, self.data['waveforms'])
+        self.attr_df = df
+        self.waveforms = self.data['waveforms'][df_index, :]
 
-        
+
+    def save_to_files(self):        
+        self.attr_df.to_csv(self.attributes_file, index=False)
+        np.save(self.waveforms_file, self.waveforms)

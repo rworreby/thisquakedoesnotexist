@@ -21,7 +21,6 @@ import mlflow
 
 from thisquakedoesnotexist.utils.data import WaveDatasetDist
 from thisquakedoesnotexist.utils.random_fields import rand_noise
-from thisquakedoesnotexist.utils.utils import *
 from thisquakedoesnotexist.utils.param_parser import ParamParser
 from thisquakedoesnotexist.utils.plotting import plot_syn_data_grid, plot_syn_data_single
 from thisquakedoesnotexist.utils.plotting import plot_waves_1C

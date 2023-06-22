@@ -26,7 +26,7 @@ class Discriminator(nn.Module):
         #  --- init function ---
 
         #  get embeddings for the conditional variables
-        self.embed1 = embed(1, 1000)
+        self.embed1 = embed(2, 1000)
 
         # first layer
         # concatenate conditional variables | (6, 4000, 1) out
@@ -65,11 +65,11 @@ class Discriminator(nn.Module):
         # reshape for one channel convolutions
         x = x.view(-1, 1, 1000, 1)
 
-
         #  apply embeddings for the conditional variables
         # v1 = self.embed1(v1)
         # v2 = self.embed1(v2)
         # v3 = self.embed1(v3)
+        
         vc = self.embed1(vc)
         # # reshape
         vc = vc.view(-1, 1, 1000, 1)
@@ -142,7 +142,7 @@ class Generator(nn.Module):
         # output: (1,150) | apply expanddim  | (1,150,1) out
 
         #  ---- get embeddings for the conditional variables ----
-        self.embed1 = embed(1, 150)
+        self.embed1 = embed(2, 150)
 
         # ------------------------------------------------------
 
@@ -240,14 +240,17 @@ class Generator(nn.Module):
         x = torch.unsqueeze(x, 3)
         # print('torch.unsqueeze shape:', x.shape)
 
+
         # ----------- Conditional variables  ------------
         #  apply embeddings for the conditional variables
         vc = self.embed1(vc)
+       
         vc = vc.view(-1, 1, 150, 1)
-
+        
         # concatenate conditional variables to input
+        
         x = torch.cat([x, vc], 1)
-        # print('torch.cat([x, vc], 1) shape: ', x.shape)
+        # print('torch.cat([x, vc], 2) shape: ', x.shape)
         # ------------------------------------------------
 
         x = self.conv0(x)

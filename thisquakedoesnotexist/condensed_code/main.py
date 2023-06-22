@@ -5,10 +5,8 @@
  W GAN implementation."""
 
 import os
-import json
 import shutil
 from argparse import ArgumentParser
-
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -79,14 +77,48 @@ def evaluate_model(G, n_waveforms, n_dist_bins, dist, dataset, noise_dim, lt, dt
 
 
 def get_syntetic_data(G, n_waveforms, n_dist_bins, dist, dataset, noise_dim, lt, dt):
+    """get_syntetic_data returns n=n_waveforms number of synthetic waveforms for the corresponding distance dist.
+
+    _extended_summary_
+
+    :param G: Generator object to create waveforms
+    :type G: Generator
+    :param n_waveforms: number of waveforms to create
+    :type n_waveforms: int
+    :param n_dist_bins: number of distance bins to use
+    :type n_dist_bins: int
+    :param dist: conditional variable for distance
+    :type dist: float
+    :param dataset: _description_
+    :type dataset: WaveDatasetDist
+    :param noise_dim: _description_
+    :type noise_dim: int
+    :param lt: _description_
+    :type lt: int
+    :param dt: _description_
+    :type dt: float
+    :return: list of len n_waveforms of synthetic waveforms
+    :rtype: list
+    """
     # Create some extra waveforms to filter out mode collapse
     samples = 2 * n_waveforms
 
+    
+    dist = 60.0
+    mag = 5.8
+
+    vc_list = [dist * torch.ones(samples, 1).cuda(),
+               mag * torch.ones(samples, 1).cuda(), ] #  vs30 * torch.ones(n_batch, 1).cuda(), 
+    
+    # breakpoint()
+    
     grf = rand_noise(1, noise_dim, device=device)
-    distv = 60.0 * np.ones((samples, 1))
-    distv = dataset.fn_dist_scale(distv)
-    distv = torch.from_numpy(distv).float()
+    # distv = dataset.fn_dist_scale(grf)
+    distv = torch.from_numpy(grf).float()
     distv = distv.to(device)
+
+    G.eval()
+    wfs = G(z, *vc_list)
 
     z = grf.sample(samples)
     x_g = G(z, distv)
@@ -102,6 +134,35 @@ def get_syntetic_data(G, n_waveforms, n_dist_bins, dist, dataset, noise_dim, lt,
             continue
         good_samples.append(wf)
     return good_samples[:n_waveforms]
+
+
+def get_waves_real_bin(s_dat, distbs, mbs, vsb):
+    # get dataframe with attributes
+    df = s_dat.df_meta
+    # get waves
+    wfs = s_dat.wfs
+    cnorms = s_dat.cnorms
+    print(df.shape)
+    # select bin of interest
+    ix = ((distbs[0] <= df['dist']) & (df['dist'] < distbs[1]) &
+          (mbs[0] <= df['mag']) & (df['mag'] <= mbs[1]) &
+          (vsb[0] <= df['vs30']) & (df['vs30'] < vsb[1]))
+
+    # get normalization coefficients
+    df_s = df[ix]
+    # get waveforms
+    ws_r = wfs[ix,:,:]
+    c_r = cnorms[ix,:]
+    Nobs = ix.sum()
+    print('# observations', Nobs)
+    print('MAG: {:.2f}'.format(df_s['mag'].min(), df_s['mag'].max()))
+    print('DIST: {:.2f}'.format(df_s['dist'].min(), df_s['dist'].max()))
+    print('Vs30: {:.2f}'.format(df_s['vs30'].min(), df_s['vs30'].max()))
+    print('MAG Mean: {:.2f}'.format(df_s['mag'].mean()))
+    print('DIST Mean: {:.2f}'.format(df_s['dist'].mean()))
+    print('Vs30 Mean: {:.2f}'.format(df_s['vs30'].mean()))
+
+    return (ws_r, c_r)
 
 
 def main():
@@ -164,7 +225,7 @@ def main():
     g_loss_ep = np.zeros(args.epochs)
 
     distance = 60.0
-    distv = distance * np.ones((n_samples, 1))
+    distv = distance * np.ones((n_samples, 2))
     distv = dataset.fn_dist_scale(distv)
     distv = torch.from_numpy(distv).float()
     distv = distv.to(device)
@@ -176,6 +237,7 @@ def main():
         n_critic = 0
         
         for batch_i, (x_r, vc_r) in enumerate(train_loader):
+            
             # current batch size
             n_samples = x_r.size(0)
             # --------  TRAIN THE DISCRIMINATOR --------
@@ -282,7 +344,7 @@ def main():
         # eval mode for generating samples
         G.eval()
         z = grf.sample(n_plots)
-        x_g = G(z,distv)
+        x_g = G(z, distv)
         x_g = x_g.squeeze()
         x_g = x_g.detach().cpu()
         fig_file = os.path.join(f'{out_dir}/syn_data', f"syn_ep_{ix_ep+1:03}.png")

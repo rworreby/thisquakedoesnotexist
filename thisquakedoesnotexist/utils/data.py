@@ -4,6 +4,10 @@ from torch.utils.data import Dataset, DataLoader
 import pandas as pd
 
 
+NDIST_BINS = 4
+MAG_BINS = [5.8, 6.0, 6.2, 6.501]
+
+
 def make_ibins(v, nbins):
     """
     :param v: data
@@ -119,12 +123,14 @@ class WaveDatasetDist(Dataset):
 
         # get functions
         self.fn_dist_scale = make_rescale(dist)
-        # self.fn_mag_scale = make_rescale(mag)
+        self.fn_mag_scale = make_rescale(mag)
 
         # define bins
-        # nmag_bins = ndist_bins
-        # mag_bins = make_ibins(mag, nmag_bins)
-        # magv, m_bins, cnt_bins = make_vc_bins(mag, mag_bins)
+        nmag_bins = ndist_bins
+        mag_bins = make_ibins(mag, nmag_bins)
+        magv, m_bins, cnt_bins = make_vc_bins(mag, mag_bins)
+        
+        # magv, m_bins, cnt_bins = make_vc_bins(mag, MAG_BINS)
 
         # distance
         dist_bins = make_ibins(dist, ndist_bins)
@@ -135,12 +141,13 @@ class WaveDatasetDist(Dataset):
 
         # create array for conditional variables
         distv = self.fn_dist_scale(distv)
-        # magv = self.fn_mag_scale(magv)
+        magv = self.fn_mag_scale(magv)
+
         # create conditional variables
         vc = distv
-        vc = np.concatenate( (distv, ), axis=1)
+        vc = np.concatenate( (distv, magv), axis=1)
         print('vc[:,0] min: ', vc[:, 0].min())
-        # print('vc[:,1] min: ',vc[:, 1].min())
+        print('vc[:,1] min: ', vc[:, 1].min())
 
 
         # convert to tensors
@@ -160,7 +167,7 @@ class WaveDatasetDist(Dataset):
 
     def get_rand_cond_v(self,Nbatch):
         """
-        :param Nbatch: number of samples to daraw
+        :param Nbatch: number of samples to draw
         :return:
         """
         ixc = np.random.choice(self.ix, size=Nbatch, replace=False)

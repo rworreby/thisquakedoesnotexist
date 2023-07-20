@@ -14,7 +14,7 @@ def main():
     outfile = 'thisquakedoesnotexist/data/japan/downsampled.h5'
 
     # initial time of recording
-    time_ini_sec = 0.04
+    time_ini_sec = 0.05
 
     # length of recording
     tt_wave_sec = 50.0
@@ -24,8 +24,9 @@ def main():
     factor = 5
     lower_bound = 4.0
     upper_bound = 7.5
+    channels = 1
 
-    preprocessor = Preprocessor(input_file, outfile, time_ini_sec, tt_wave_sec, sample_rate)
+    preprocessor = Preprocessor(input_file, outfile, time_ini_sec, tt_wave_sec, sample_rate, channels)
 
     preprocessor.downsample(factor, lower_bound, upper_bound)
     preprocessor.compute_pga()

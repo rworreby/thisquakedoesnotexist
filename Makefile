@@ -102,4 +102,4 @@ train: clean ## train the conditional GAN model
 pipeline: preprocess train ## runs the preprocessor and training steps successively
 
 train_file: clean ## execute (train) runfile given as CLA
-	./thisquakedoesnotexist/condensed_code/$(file)
+	./thisquakedoesnotexist/runfiles/$(file)

@@ -26,7 +26,9 @@ class Discriminator(nn.Module):
         #  --- init function ---
 
         #  get embeddings for the conditional variables
-        self.embed1 = embed(2, 1000)
+        self.embed1 = embed(1, 1000)
+        self.embed2 = embed(1, 1000)
+        self.embed3 = embed(1, 1000)
 
         # first layer
         # concatenate conditional variables | (6, 4000, 1) out
@@ -63,19 +65,17 @@ class Discriminator(nn.Module):
         # print('shape x init:', x.shape)
 
         # reshape for one channel convolutions
-        x = x.view(-1, 1, 1000, 1)
+        v1 = self.embed1(v1)
+        v2 = self.embed2(v2)
+        v3 = self.embed3(v3)
 
-        #  apply embeddings for the conditional variables
-        # v1 = self.embed1(v1)
-        # v2 = self.embed1(v2)
-        # v3 = self.embed1(v3)
-        
-        vc = self.embed1(vc)
         # # reshape
-        vc = vc.view(-1, 1, 1000, 1)
-        
+        v1 = v1.view(-1, 1, 1000, 1)
+        v2 = v2.view(-1, 1, 1000, 1)
+        v3 = v3.view(-1, 1, 1000, 1)
+
         # concatenate conditional variables to input
-        x = torch.cat([x, vc], 1)
+        x = torch.cat([x, v1, v2, v3], 1)
         # print('torch.cat([x, vc], 1)', x.shape)
 
         x = self.conv1(x)
@@ -142,13 +142,15 @@ class Generator(nn.Module):
         # output: (1,150) | apply expanddim  | (1,150,1) out
 
         #  ---- get embeddings for the conditional variables ----
-        self.embed1 = embed(2, 150)
+        self.embed1 = embed(1, 150)
+        self.embed1 = embed(1, 150)
+        self.embed1 = embed(1, 150)
 
         # ------------------------------------------------------
 
         # output after concatenating conditional variables: | (2, 150, 1) out
 
-        self.conv0 = nn.Conv2d(2, 6, kernel_size=(5, 1), stride=(1, 1), padding=(2, 0), )
+        self.conv0 = nn.Conv2d(4, 6, kernel_size=(5, 1), stride=(1, 1), padding=(2, 0), )
         # output: (6, 150, 1) | apply batchnorm s
         self.batchnorm0 = nn.BatchNorm2d(6)
         # output: (6, 150, 1)
@@ -243,13 +245,17 @@ class Generator(nn.Module):
 
         # ----------- Conditional variables  ------------
         #  apply embeddings for the conditional variables
-        vc = self.embed1(vc)
-       
-        vc = vc.view(-1, 1, 150, 1)
-        
+        v1 = self.embed1(v1)
+        v2 = self.embed2(v2)
+        v3 = self.embed3(v3)
+
+        # # reshape
+        v1 = v1.view(-1, 1, 1000, 1)
+        v2 = v2.view(-1, 1, 1000, 1)
+        v3 = v3.view(-1, 1, 1000, 1)
+
         # concatenate conditional variables to input
-        
-        x = torch.cat([x, vc], 1)
+        x = torch.cat([x, v1, v2, v3], 1)
         # print('torch.cat([x, vc], 2) shape: ', x.shape)
         # ------------------------------------------------
 

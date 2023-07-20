@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
 
-"""Uses pointwise encoder using unit gaussian
- NO TANH activation at the end of generator model
- W GAN implementation."""
-
 import os
 import shutil
 from argparse import ArgumentParser
@@ -18,21 +14,23 @@ from torch.autograd import Variable
 import mlflow
 
 from thisquakedoesnotexist.utils.data import WaveDatasetDist
-from thisquakedoesnotexist.utils.random_fields import rand_noise
+from thisquakedoesnotexist.condensed_code.dataUtils_v1 import SeisData
+
+from thisquakedoesnotexist.utils.random_fields import rand_noise, uniform_noise
 from thisquakedoesnotexist.utils.param_parser import ParamParser
 from thisquakedoesnotexist.utils.plotting import plot_syn_data_grid, plot_syn_data_single
 from thisquakedoesnotexist.utils.plotting import plot_waves_1C
 from thisquakedoesnotexist.utils.tracking import log_model_mlflow, log_params_mlflow
-from thisquakedoesnotexist.condensed_code.gan1d import Generator, Discriminator
+from thisquakedoesnotexist.models.gan_d1 import Generator, Discriminator
 
 SHOW_FIG = False
 sns.set()
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-use_cuda = torch.cuda.is_available()
-device = torch.device("cuda" if use_cuda else "cpu")
+cuda = True if torch.cuda.is_available() else False
+device = torch.device("cuda" if cuda else "cpu")
 print(f"Running on device: {device}")
-
+Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
 
 def set_up_folders(conf_d, run_id):
     """
@@ -102,26 +100,28 @@ def get_syntetic_data(G, n_waveforms, n_dist_bins, dist, dataset, noise_dim, lt,
     """
     # Create some extra waveforms to filter out mode collapse
     samples = 2 * n_waveforms
-
     
     dist = 60.0
     mag = 5.8
+    vs30 = 0.5
 
     vc_list = [dist * torch.ones(samples, 1).cuda(),
-               mag * torch.ones(samples, 1).cuda(), ] #  vs30 * torch.ones(n_batch, 1).cuda(), 
+               mag * torch.ones(samples, 1).cuda(),
+               vs30 * torch.ones(samples, 1).cuda(),
+    ]
     
     # breakpoint()
     
     grf = rand_noise(1, noise_dim, device=device)
     # distv = dataset.fn_dist_scale(grf)
-    distv = torch.from_numpy(grf).float()
-    distv = distv.to(device)
+    #distv = torch.from_numpy(grf).float()
+    # distv = distv.to(device)
+    z = grf.sample(samples)
 
     G.eval()
-    wfs = G(z, *vc_list)
-
-    z = grf.sample(samples)
-    x_g = G(z, distv)
+    
+    x_g = G(z, *vc_list)
+    #x_g = G(z, distv)
     x_g = x_g.squeeze()
     x_g = x_g.detach().cpu()
 
@@ -188,20 +188,48 @@ def main():
     dt = args.dt
     t_max = dt * args.lt
 
+    f = np.load(args.data_file)
+    num_samples = len(f)
+    del f
+
+    # get all indexes
+    ix_all = np.arange(num_samples)
+
+    condv_names = ['dist', 'mag', 'vs30']
+    nbins_dict = {
+        'dist': 30,
+        'mag': 30,
+        'vs30': 1,
+    }
+
     # prepare data loader
-    dataset = WaveDatasetDist(data_file=args.data_file, attr_file=args.attr_file, ndist_bins=args.ndist_bins, dt=dt)
+    sdat_train = SeisData(
+        data_file=args.data_file,
+        attr_file=args.attr_file,
+        batch_size=args.batch_size,
+        sample_rate=args.sample_rate,
+        v_names=condv_names,
+        nbins_d=nbins_dict,
+        isel=ix_all,
+    )
+    # dataset = WaveDatasetDist(data_file=args.data_file, attr_file=args.attr_file, ndist_bins=args.ndist_bins, dt=dt)
     # create train loader
-    train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
+    # train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
 
-    n_train = len(dataset)
+    # batch size
+    Nbatch = sdat_train.get_batch_size()
+    # total number of batches
+    N_train_btot = sdat_train.get_Nbatches_tot()
+
+    # n_train = len(dataset)
     
-    x_r, y_r = next(iter(train_loader))
-    n_samples = x_r.size(0)
-    n_plots = n_samples
+    # x_r, y_r = next(iter(train_loader))
+    # n_samples = x_r.size(0)
+    # n_plots = n_samples
 
-    n_cond_var = 1
+    n_channels = 1
 
-    grf = rand_noise(n_cond_var, args.noise_dim, device=device)
+    grf = rand_noise(n_channels, args.noise_dim, device=device)
     z = grf.sample(args.nplt_max)
     print("z shape: ", z.shape)
     z = z.squeeze()
@@ -224,11 +252,11 @@ def main():
     d_total_loss_ep = np.zeros(args.epochs)
     g_loss_ep = np.zeros(args.epochs)
 
-    distance = 60.0
-    distv = distance * np.ones((n_samples, 2))
-    distv = dataset.fn_dist_scale(distv)
-    distv = torch.from_numpy(distv).float()
-    distv = distv.to(device)
+    # distance = 60.0
+    # distv = distance * np.ones((n_samples, 2))
+    # distv = dataset.fn_dist_scale(distv)
+    # distv = torch.from_numpy(distv).float()
+    # distv = distv.to(device)
 
     for ix_ep in range(args.epochs):
         d_train_wloss = 0.0
@@ -236,14 +264,19 @@ def main():
         g_train_loss = 0.0
         n_critic = 0
         
-        for batch_i, (x_r, vc_r) in enumerate(train_loader):
-            
-            # current batch size
-            n_samples = x_r.size(0)
-            # --------  TRAIN THE DISCRIMINATOR --------
-            # 1. Move data to GPU
-            x_r = x_r.to(device)
-            vc_r = vc_r.to(device)
+        for i_c in range(args.n_critic):
+    
+            (data_b, i_vc) = sdat_train.get_rand_batch()
+            real_wfs = torch.from_numpy(data_b).float()
+            real_wfs = real_wfs.view(-1, 1, 1000, 1)
+            i_vc = [torch.from_numpy(i_v).float() for i_v in i_vc]
+            # number of samples
+            n_samples = real_wfs.size(0)
+            # load into gpu
+            if cuda:
+                real_wfs = real_wfs.cuda()
+                i_vc = [i_v.cuda() for i_v in i_vc]
+
 
             # clear gradients
             d_optimizer.zero_grad()
@@ -251,16 +284,19 @@ def main():
             # Gaussian random field
             z = grf.sample(n_samples)
             
+            # breakpoint()
+
+            fake_wfs = G(z, *i_vc)
+            # 3. Compute gradient penalty term
+            
+            alpha = torch.rand(n_samples, 1, 1, 1, device=device)
+            # Get random interpolation between real and fake samples
+
             # breakpoint()
 
-            x_g = G(z, vc_r)
-            # 3. Compute gradient penalty term
-         
-            alpha = torch.rand(n_samples, 1, 1, device=device)
-            # Get random interpolation between real and fake samples
-            Xp = (alpha * x_r + ((1 - alpha) * x_g)).requires_grad_(True)
+            Xp = (alpha * real_wfs + ((1 - alpha) * fake_wfs)).requires_grad_(True)
             # apply discriminator
-            D_xp = D(Xp, vc_r)
+            D_xp = D(Xp, *i_vc)
             # Jacobian related variable
             Xout = Variable(torch.ones(n_samples,1, device=device), requires_grad=False)
             # Get gradient w.r.t. interpolates
@@ -275,7 +311,7 @@ def main():
             grads = grads.view(grads.size(0), -1)
             # 4. Compute losses
             d_gp_loss = args.gp_lambda * ((grads.norm(2, dim=1) - 1.0) ** 2).mean()
-            d_w_loss = -torch.mean(D(x_r, vc_r)) + torch.mean(D(x_g, vc_r))
+            d_w_loss = -torch.mean(D(real_wfs, *i_vc)) + torch.mean(D(fake_wfs, *i_vc))
             d_loss = d_w_loss + d_gp_loss
 
             # store losses in accumulators
@@ -298,13 +334,25 @@ def main():
                 g_optimizer.zero_grad()
 
                 # 1. Generate fake data with fake data
+                z = uniform_noise(Nbatch, args.noise_dim)
+                z = torch.from_numpy(z).float()
+                # get random sampling of conditional variables
+                i_vg = sdat_train.get_rand_cond_v()
+                i_vg = [torch.from_numpy(i_v).float() for i_v in i_vg]
+                # move to GPU
+                if cuda:
+                    z = z.cuda()
+                    i_vg = [i_v.cuda() for i_v in i_vg]
+                
                 z = grf.sample(n_samples)
-                vc_g = dataset.get_rand_cond_v(n_samples)
-                vc_g = vc_g.to(device)
+                fake_wfs = G(z, *i_vg)
 
-                x_g = G(z, vc_g)
+                x_g = G(z, *i_vc)
                 # 2. calculate loss
-                g_loss = -torch.mean( D(x_g, vc_g) )
+                g_loss = -torch.mean( D(fake_wfs, *i_vg) )
+                
+                # breakpoint()
+                
                 # The weights of the generator are optimized with respect
                 # to the discriminator loss
                 # the generator is trained to produce data that will be classified
@@ -324,16 +372,16 @@ def main():
                 ### --------------  END GENERATOR STEP ------------------------
 
             # Print some loss stats
-            if (batch_i % args.print_freq == 0):
+            if (i_c % args.print_freq == 0):
                 # print discriminator and generator loss
                 print('Epoch [{:5d}/{:5d}] | d_tot_loss: {:6.4f} | g_wloss: {:6.4f}'.format(
                     ix_ep + 1, args.epochs, d_loss.item(), d_w_loss.item()))
 
         # --------- End training epoch -----------
         # save losses
-        d_wloss_ep[ix_ep] = d_train_wloss / n_train
-        d_total_loss_ep[ix_ep] = (d_train_wloss + d_train_gploss) / n_train
-        g_loss_ep[ix_ep] = g_train_loss / n_train
+        d_wloss_ep[ix_ep] = d_train_wloss / N_train_btot
+        d_total_loss_ep[ix_ep] = (d_train_wloss + d_train_gploss) / N_train_btot
+        g_loss_ep[ix_ep] = g_train_loss / N_train_btot
 
         mlflow.log_metric(key="d_train_wloss", value=d_wloss_ep[ix_ep], step=ix_ep)
         mlflow.log_metric(key="d_total_loss", value=d_total_loss_ep[ix_ep], step=ix_ep)
@@ -342,9 +390,11 @@ def main():
         # --- AFTER EACH EPOCH ---
         # generate and save sample synthetic images
         # eval mode for generating samples
+        distance = 60
+        
         G.eval()
-        z = grf.sample(n_plots)
-        x_g = G(z, distv)
+        z = grf.sample(n_samples)
+        x_g = G(z, *i_vc)
         x_g = x_g.squeeze()
         x_g = x_g.detach().cpu()
         fig_file = os.path.join(f'{out_dir}/syn_data', f"syn_ep_{ix_ep+1:03}.png")
@@ -381,7 +431,7 @@ def main():
     n_waveforms = 72 * 5
     dist = 60
 
-    evaluate_model(G, n_waveforms, args.ndist_bins, dist, dataset, args.noise_dim, args.lt, args.dt, fig_dir)
+    evaluate_model(G, n_waveforms, args.ndist_bins, dist, sdat_train, args.noise_dim, args.lt, args.dt, fig_dir)
     mlflow.log_artifacts(f"{out_dir}/figs", "figs")
     
 if __name__ == '__main__':

@@ -3,13 +3,12 @@ import os
 import json
 import shutil
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 # isaiimportss
 import matplotlib.pyplot as plt
 import numpy as np
 import pickle as pkl
-from imp import reload
 
 
 # pytorch importsa
@@ -23,13 +22,11 @@ import torch.optim as optim
 
 # costum utilities
 import dataUtils_v1
-import gan_d1
+from thisquakedoesnotexist.models import gan_d1
 
 # make sure class ais reloaded everytime the cell is executed
-reload(dataUtils_v1)
 from dataUtils_v1 import SeisData, plot_waves_3C
 
-reload(gan_d1)
 from gan_g1 import Discriminator, Generator
 
 # -------- Input Parameters -------

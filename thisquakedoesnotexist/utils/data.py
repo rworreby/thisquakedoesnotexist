@@ -83,7 +83,7 @@ class WaveDatasetDist(Dataset):
         print('Shape attribute file: ', df.shape)
 
         print('normalizing data ...')
-        wfs_norm = np.max(np.abs(x_data), axis=1)
+        wfs_norm = np.nanmax(np.abs(x_data), axis=1)
         self.wfs_norm = wfs_norm
         
         # for braadcasting
@@ -117,6 +117,7 @@ class WaveDatasetDist(Dataset):
         # create scaling functions
         dist = np.array(df['dist']).reshape(-1, 1)
         mag = np.array(df['mag']).reshape(-1,1)
+        vs30 = np.array(df['vs30']).reshape(-1,1)
         
         # sampling rate
         self.dt = dt
@@ -124,13 +125,12 @@ class WaveDatasetDist(Dataset):
         # get functions
         self.fn_dist_scale = make_rescale(dist)
         self.fn_mag_scale = make_rescale(mag)
+        self.fn_vs30_scale = make_rescale(vs30)
 
         # define bins
         nmag_bins = ndist_bins
         mag_bins = make_ibins(mag, nmag_bins)
         magv, m_bins, cnt_bins = make_vc_bins(mag, mag_bins)
-        
-        # magv, m_bins, cnt_bins = make_vc_bins(mag, MAG_BINS)
 
         # distance
         dist_bins = make_ibins(dist, ndist_bins)
@@ -145,7 +145,7 @@ class WaveDatasetDist(Dataset):
 
         # create conditional variables
         vc = distv
-        vc = np.concatenate( (distv, magv), axis=1)
+        vc = np.concatenate( (distv, magv, vs30), axis=1)
         print('vc[:,0] min: ', vc[:, 0].min())
         print('vc[:,1] min: ', vc[:, 1].min())
 
@@ -165,14 +165,14 @@ class WaveDatasetDist(Dataset):
         # index for variables
         self.ix = np.arange(Nsamp)
 
-    def get_rand_cond_v(self,Nbatch):
+    def get_rand_cond_v(self, Nbatch):
         """
         :param Nbatch: number of samples to draw
         :return:
         """
         ixc = np.random.choice(self.ix, size=Nbatch, replace=False)
         ixc.sort()
-        vc_b =self.vc[ixc,:]
+        vc_b =self.vc[ixc, :]
         return vc_b
 
     def __len__(self):

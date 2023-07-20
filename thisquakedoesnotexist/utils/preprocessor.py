@@ -22,6 +22,8 @@ class Preprocessor:
     :type duration: float
     :param sample_rate: Number of samples per second
     :type sample_rate: float
+    :param channels: Number of Channels (dimension) of data after downsampling. E.g. 1 or 3.
+    :type channels: int
     """
 
     def __init__(
@@ -31,6 +33,7 @@ class Preprocessor:
         burnin: float,
         duration: float,
         sample_rate: float,
+        channels: int,
         waveforms_file: str = 'thisquakedoesnotexist/data/japan/waveforms.npy',
         attributes_file: str = 'thisquakedoesnotexist/data/japan/attributes.csv',
     ):
@@ -41,6 +44,7 @@ class Preprocessor:
         self.burnin = burnin
         self.duration = duration
         self.sample_rate = sample_rate
+        self.channels = channels
         self.waveforms_file = waveforms_file
         self.attributes_file = attributes_file
 
@@ -56,7 +60,7 @@ class Preprocessor:
         :param factor: Factor by which the data is downsampled
         :type factor: int
         :param lower_bound: Lower threshold from above which data is drawn
-        :type threshold: float
+        :type lower_bound: float
         :param upper_bound: Upper threshold from below which data is drawn
         :type threshold: float
         """
@@ -71,23 +75,42 @@ class Preprocessor:
             dimension = len(self.h5_file[val].shape)
 
             begin = int(self.burnin * self.sample_rate * factor)
+            """
+            print("Selecting data from beginning location: ", begin)
+            print(f"self.burnin: {self.burnin} \t self.sample_rate: {self.sample_rate} \t factor: {factor}.")
+            print(f"self.sample_rate * factor: {self.sample_rate * factor}")
+            """
             end = int(self.duration * self.sample_rate * factor + begin)
 
             # all other attributes
             if dimension == 1:
+                print(f'Downsampling for variable {self.h5_file[val]}: [begin:end:factor]')
                 self.data[val] = self.h5_file[val][begin:end:factor]
             # magnitudes
             elif dimension == 2:
+                print(f'Downsampling for variable {self.h5_file[val]}: [:, threshold_start:threshold_end]')
                 self.data[val] = self.h5_file[val][:, threshold_start:threshold_end]
             # waveforms
             elif dimension == 3:
-                self.data[val] = \
-                    np.array(self.h5_file[val][1, begin:end:factor, threshold_start:threshold_end]).transpose((1, 0))
+                print(f"Data of wfs orig: {self.h5_file[val][:10, :10]}")
+                if self.channels == 1:
+                    print(f'Downsampling for variable {self.h5_file[val]}: [1, begin:end:factor, threshold_start:threshold_end]')
+                    self.data[val] = \
+                        np.array(self.h5_file[val][1, begin:end:factor, threshold_start:threshold_end]).transpose((1, 0))
+                elif self.channels == 3:
+                    print(f'Downsampling for variable {self.h5_file[val]}: [:, begin:end:factor, threshold_start:threshold_end]')
+                    self.data[val] = \
+                        np.array(self.h5_file[val][:, begin:end:factor, threshold_start:threshold_end]).transpose((2, 0, 1))
+                else:
+                    print("Unclear dimension (channel) for downsampling. Try 3 or 1.")
+                
+                print(f"Data of wfs after sampling: {self.data[val][:10, :10]}")
             else:
                 print(f"Nothing to be done for {val}, skipping downsampling.")
                 self.data[val] = self.h5_file[val][:, :]
                 continue
 
+            
             print(f"Downsampling for {val}:")
             print(f"Old dimensions of data: {self.h5_file[val].shape}")
             print(f"New dimension of data: {self.data[val].shape}")
@@ -95,20 +118,37 @@ class Preprocessor:
     
     def compute_pga(self):
         wfs_p = np.abs(self.data['waveforms'])
-        
+
         # Calculate the max amplitude
-        wa = np.max(wfs_p, axis=1)
-        
-        self.data['pga_v'] = wa.reshape(1, -1)
+        if self.channels == 1:
+            wa = np.nanmax(wfs_p, axis=1)
+            self.data['pga_v'] = wa # .reshape(1, -1)
+        if self.channels == 3:
+            wa = np.nanmax(wfs_p, axis=2)
+            wa = np.nanmax(wa, axis=1)
+            self.data['pga_v'] = wa
+
         print(self.data.keys())
 
 
     def select_shallow_crustal(self):
         n_obs = np.array(self.data['waveforms']).shape[0]
+        
+        """
+        if self.channels == 3:
+            n_obs = np.array(self.data['waveforms']).shape[0]
+        """
+        pga_v = self.data['pga_v'][:] #.reshape(-1)
+        """
+        if self.channels == 3:
+            pga_v = self.data['pga_v'][1:, 1]
+        """
+
+        # breakpoint()
 
         df = pd.DataFrame({
             'i_wf': np.arange(n_obs), # index for waveform
-            'dist': self.data['hypocentral_distance'][0, :],  
+            'dist': self.data['hypocentral_distance'][0, :],
             'ev_dep': self.data['hypocentre_depth'][0, :],
             'hypocentre_latitude': self.data['hypocentre_latitude'][0, :],
             'hypocentre_longitude': self.data['hypocentre_longitude'][0, :],
@@ -116,7 +156,7 @@ class Preprocessor:
             'log10snr': self.data['log10snr'][0, :],
             'mag': self.data['magnitude'][0, :],
             'vs30': self.data['vs30'][0, :],
-            'pga_v': self.data['pga_v'][0, :],
+            'pga_v': pga_v,
         })
 
         # select only shallow crustal events
@@ -124,8 +164,68 @@ class Preprocessor:
         df_index = df['i_wf'].values
 
         self.attr_df = df
+        print(f'Old dimension of waveforms: {self.data["waveforms"].shape}')
         self.waveforms = self.data['waveforms'][df_index, :]
+        
+        breakpoint()
+        # normalize waveforms
+        if self.channels == 3:
+            self.waveforms = (np.array(self.waveforms).transpose(2, 1, 0) / np.array(pga_v[df_index])).transpose(2, 1, 0)
+            self.waveforms[:, 0, :] = pga_v[df_index]
 
+        if self.channels == 1:
+            self.waveforms = (np.array(self.waveforms).transpose(1, 0) / np.array(pga_v[df_index])).transpose(1, 0)
+            self.waveforms[:, 0] = pga_v[df_index]
+        breakpoint()
+        self.waveforms = np.nan_to_num(self.waveforms, 0)
+
+        # self.data['waveforms'] = self.waveforms
+
+        print(f'Old dimension of waveforms: {self.waveforms.shape}')
+
+
+    """
+    def select_shallow_crustal(self):
+        n_obs = np.array(self.data['waveforms']).shape[0] -1 
+        
+        pga_v = self.data['pga_v'][1:] #.reshape(-1)
+        
+
+        # breakpoint()
+
+        df = pd.DataFrame({
+            'i_wf': np.arange(n_obs), # index for waveform
+            'dist': self.data['hypocentral_distance'][0, 1:],
+            'ev_dep': self.data['hypocentre_depth'][0, 1:],
+            'hypocentre_latitude': self.data['hypocentre_latitude'][0, 1:],
+            'hypocentre_longitude': self.data['hypocentre_longitude'][0, 1:],
+            'is_shallow_crustal': self.data['is_shallow_crustal'][0, 1:],
+            'log10snr': self.data['log10snr'][0, 1:],
+            'mag': self.data['magnitude'][0, 1:],
+            'vs30': self.data['vs30'][0, 1:],
+            'pga_v': pga_v,
+        })
+
+        # select only shallow crustal events
+        df = df.loc[(df['is_shallow_crustal'] != 0)].reset_index(drop=True)
+        df_index = df['i_wf'].values
+
+        self.attr_df = df
+        print(f'Old dimension of waveforms: {self.data["waveforms"].shape}')
+        self.waveforms = self.data['waveforms'][df_index, :]
+        
+        # breakpoint()
+        # normalize waveforms
+        if self.channels == 3:
+            self.waveforms = (np.array(self.waveforms).transpose(2, 1, 0) / np.array(pga_v[df_index])).transpose(2, 1, 0)
+        if self.channels == 1:
+            self.waveforms = (np.array(self.waveforms).transpose(1, 0) / np.array(pga_v[df_index])).transpose(1, 0)
+        
+        breakpoint()
+        self.waveforms = np.nan_to_num(self.waveforms, 0)
+        
+        print(f'Old dimension of waveforms: {self.waveforms.shape}')
+    """
 
     def save_to_files(self):        
         self.attr_df.to_csv(self.attributes_file, index=False)

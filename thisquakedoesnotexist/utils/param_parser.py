@@ -22,9 +22,9 @@ class ParamParser:
         setup_args.add_argument('--attr_file', type=str, default='thisquakedoesnotexist/data/japan/attributes.csv',
                                 help='Path to attributes data file. Needs to by in .csv format.\
                                     Default: thisquakedoesnotexist/data/japan/attributes.csv"')
-        setup_args.add_argument('--model_file', type=str, default='thisquakedoesnotexist/condensed_code/gan1d.py',
+        setup_args.add_argument('--model_file', type=str, default='thisquakedoesnotexist/models/gan_d1.py',
                                 help='Path to GAN model architecture file.\
-                                    Default: "thisquakedoesnotexist/condensed_code/gan1d.py"')    
+                                    Default: "thisquakedoesnotexist/models/gan_d1.py"')    
 
         # Model parameters
         model_args = parser.add_argument_group('Model Parameters')
@@ -44,13 +44,19 @@ class ParamParser:
                                 help='Adam optimizer parameter beta1. Default: 0.0')
         model_args.add_argument('--beta2', type=float, default=0.9,
                                 help='Adam optimizer parameter beta2. Default: 0.9')
+        model_args.add_argument('--sample_rate', type=int, default=100,
+                                help='Sample rate of data in Hz. Default: 100')
+  
         
         # Training Parameters
         training_args = parser.add_argument_group('Training Parameters')
         training_args.add_argument('--epochs', type=int, default=10,
                                    help="Set the number of epochs to train. Default: 10")
-        training_args.add_argument('--batch_size', type=int, default=40,
-                                   help="Set the batch size for training. Default: 40")
+        training_args.add_argument('--batch_size', type=int, default=32,
+                                   help="Set the batch size for training. Default: 32")
+        training_args.add_argument('--frac_train', type=float, default=0.8,
+                                   help='Fraction of data used for training (rest is used for validation). \
+                                   Default: 0.8')    
         
         # Output Parameters
         output_args = parser.add_argument_group('Output Parameters')

@@ -13,6 +13,11 @@ class rand_noise(object):
         ur = torch.randn(Nb, self.nchan, self.size, device=self.device)
         return ur
 
+def uniform_noise(Nbatch, dim):
+    # Generate noise from a uniform distribution
+    m = 1
+    return np.random.normal(size=[Nbatch, m, dim]).astype(
+        dtype=np.float32)
 
 # def grf_idct_2d(Ln, alpha=2.0, tau=3.0):
 #     """

@@ -12,7 +12,7 @@ class ParamParser:
         parser = argparse.ArgumentParser()
 
         # Setup arguments
-        setup_args = parser.add_argument_group('Setup Arguments')
+        setup_args = parser.add_argument_group('Setup Parameters')
         setup_args.add_argument('--gpus', type=int, default=1,
                                 help="Device to use. Set to 1 for GPU (default), 0 for CPU.")
         setup_args.add_argument('--name', type=str, default='Unnamed', help='Set the name of the Model')
@@ -30,8 +30,8 @@ class ParamParser:
         model_args = parser.add_argument_group('Model Parameters')
         model_args.add_argument('--lt', type=int, default=1000, 
                                 help='Size of input to discriminator. Default: 1000')
-        model_args.add_argument('--dt', type=float, default=0.04, 
-                                help='Time step size in data. Default: 0.04 (25 Hz)')
+        model_args.add_argument('--dt', type=float, default=0.05, 
+                                help='Time step size in data. Ddfault: 0.05 (20 Hz)')
         model_args.add_argument('--noise_dim', type=int, default=100, 
                                 help='Dimension of Gaussian noise. Default: 100')
         model_args.add_argument('--lr', type=float, default=1e-4, 
@@ -46,6 +46,8 @@ class ParamParser:
                                 help='Adam optimizer parameter beta2. Default: 0.9')
         model_args.add_argument('--sample_rate', type=int, default=100,
                                 help='Sample rate of data in Hz. Default: 100')
+        model_args.add_argument('--n_cond_bins', type=int, default=20,
+                                help='Number of bins for conditional variables distance, magnitude, and vs30. Default: 20')
   
         
         # Training Parameters
@@ -66,15 +68,13 @@ class ParamParser:
                                 help='Frequency for printing the parameter set (every x iterations). Default: 400')
         output_args.add_argument('--save_freq', type=int, default=1,
                                 help='Frequency for saving the model (every x iterations). Default: 1')
-        output_args.add_argument('--ndist_bins', type=int, default=20,
-                                help='?. Default: 20')
-        output_args.add_argument('--nplt_max', type=int, default=20,
+        output_args.add_argument('--n_pltots', type=int, default=20,
                                  help='Number of synthetic plots to generate. Default: 20')
         
         # MLFLow Parameters 
-        output_args = parser.add_argument_group('Output Parameters')
-        output_args.add_argument('--tracking_uri', type=str, default='/home/rworreby/thisquakedoesnotexist/mlflow/', 
-                                help='Path of MLFLow tracking URI. Default: "/home/rworreby/thisquakedoesnotexist/mlflow/"')
+        output_args = parser.add_argument_group('MLFlow Parameters')
+        output_args.add_argument('--tracking_uri', type=str, default='/home/rworreby/thisquakedoesnotexist/mlruns/', 
+                                help='Path of MLFLow tracking URI. Default: "/home/rworreby/thisquakedoesnotexist/mlruns/"')
         output_args.add_argument('--experiment_name', type=str, default='Unnamed_Experiment', 
                                 help='Name of MLFlow experiment. Default: Unnamed_Experiment')
         

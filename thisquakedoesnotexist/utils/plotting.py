@@ -16,7 +16,7 @@ def rolling_window(x, window_len):
         pos += 1
 
 
-def plot_syn_data_single(samples, dist, dt, lt, fig_dir):
+def plot_syn_data_single(samples, dt, lt, dist, mag, vs30, fig_dir):
     tt = dt * np.arange(lt)
 
     for j in range(5):
@@ -78,15 +78,15 @@ def plot_syn_data_single(samples, dist, dt, lt, fig_dir):
         ax[3].set_xlim((0.1, 50))
         ax[3].legend()
 
-        fig.suptitle(f'Random Synthetic Waveform. Dist: {dist}')
+        fig.suptitle(f'Random Synthetic Waveform. Dist: {dist:.1f}, Mag: {mag:.1f}')
         plt.subplots_adjust(hspace=0.4)
         plt.tight_layout()
 
-        fig_file = os.path.join(fig_dir, f'syntetic_data_plot_{j}.png')
+        fig_file = os.path.join(fig_dir, f'syntetic_data_plot_{dist:.1f}_km_mag_{mag:.1f}.png')
         plt.savefig(fig_file, format='png')
 
 
-def plot_syn_data_grid(samples, distance, dt, fig_dir):
+def plot_syn_data_grid(samples, distance, dt, dist, mag, vs30, fig_dir):
     n_rows = 12
     n_cols = 6
     n_tot = n_rows * n_cols 
@@ -113,7 +113,7 @@ def plot_syn_data_grid(samples, distance, dt, fig_dir):
 #    plt.tight_layout()
 
     fig.suptitle(f'Randomly drawn samples from Generator. Distance: {distance} km')
-    fig_file = os.path.join(fig_dir, 'syntetic_data_grid_plot.png')
+    fig_file = os.path.join(fig_dir, 'syntetic_data_grid_plot_dist_{dist:.1f}_mag_{mag:.1f}.png')
     plt.savefig(fig_file, format='png')
 
 

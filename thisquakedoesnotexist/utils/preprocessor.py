@@ -167,16 +167,16 @@ class Preprocessor:
         print(f'Old dimension of waveforms: {self.data["waveforms"].shape}')
         self.waveforms = self.data['waveforms'][df_index, :]
         
-        breakpoint()
-        # normalize waveforms
-        if self.channels == 3:
-            self.waveforms = (np.array(self.waveforms).transpose(2, 1, 0) / np.array(pga_v[df_index])).transpose(2, 1, 0)
-            self.waveforms[:, 0, :] = pga_v[df_index]
+        # breakpoint()
+        # # normalize waveforms
+        # if self.channels == 3:
+        #     self.waveforms = (np.array(self.waveforms).transpose(2, 1, 0) / np.array(pga_v[df_index])).transpose(2, 1, 0)
+        #     self.waveforms[:, 0, :] = pga_v[df_index]
 
-        if self.channels == 1:
-            self.waveforms = (np.array(self.waveforms).transpose(1, 0) / np.array(pga_v[df_index])).transpose(1, 0)
-            self.waveforms[:, 0] = pga_v[df_index]
-        breakpoint()
+        # if self.channels == 1:
+        #     self.waveforms = (np.array(self.waveforms).transpose(1, 0) / np.array(pga_v[df_index])).transpose(1, 0)
+        #     self.waveforms[:, 0] = pga_v[df_index]
+        # breakpoint()
         self.waveforms = np.nan_to_num(self.waveforms, 0)
 
         # self.data['waveforms'] = self.waveforms

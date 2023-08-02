@@ -10,19 +10,25 @@ def log_params_mlflow(params):
     :param params: argument parser instance
     :type params: ParamParser
     """
-    mlflow.log_param("Model_file", params.model_file)
-    mlflow.log_param("Data_file", params.data_file)
-    mlflow.log_param("Attribute_file", params.attr_file)
-    mlflow.log_param("Learning_rate", params.lr)
-    mlflow.log_param("Discriminator_input_size", params.lt)
-    mlflow.log_param("Dt", params.dt)
-    mlflow.log_param("Generator_noise_dimension", params.noise_dim)
-    mlflow.log_param("GP_Lambda", params.gp_lambda)
-    mlflow.log_param("Critic_iterations_per_training_cycle ", params.n_critic)
-    mlflow.log_param("Beta_1", params.beta1)
-    mlflow.log_param("Beta_2", params.beta2)
+    
+    mlflow.log_param("GPUs", params.gpus)
+    mlflow.log_param("Model file", params.model_file)
+    mlflow.log_param("Data file", params.data_file)
+    mlflow.log_param("Attribute file", params.attr_file)
+    mlflow.log_param("Learning rate", params.learning_rate)
+    mlflow.log_param("Discriminator size", params.discriminator_size)
+    mlflow.log_param("dt", params.time_delta)
+    mlflow.log_param("Generator noise dimension", params.noise_dim)
+    mlflow.log_param("gp lambda", params.gp_lambda)
+    mlflow.log_param("Critic iterations per cycle", params.n_critic)
+    mlflow.log_param("Optimizer Beta 1", params.beta1)
+    mlflow.log_param("Optimizer Beta 2", params.beta2)
     mlflow.log_param("Epochs", params.epochs)
-    mlflow.log_param("Batch_size", params.batch_size)
+    mlflow.log_param("Batch size", params.batch_size)
+    mlflow.log_param("Learning rate", params.learning_rate)
+    mlflow.log_param("Sample rate", params.sample_rate)
+    mlflow.log_param("Number of conditonal variable bins", params.n_cond_bins)
+    mlflow.log_param("Train test split fraction", params.frac_train)
 
 
 def log_model_mlflow(D, G, out_dir):

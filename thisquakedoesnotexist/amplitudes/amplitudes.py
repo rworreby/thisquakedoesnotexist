@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 import itertools
 import os
-import shutil
 from argparse import ArgumentParser
 
 import matplotlib.pyplot as plt
@@ -21,11 +20,12 @@ from thisquakedoesnotexist.utils.param_parser import ParamParser
 from thisquakedoesnotexist.utils.plotting import plot_syn_data_grid
 from thisquakedoesnotexist.utils.plotting import plot_syn_data_single
 from thisquakedoesnotexist.utils.plotting import plot_waves_1C
+from thisquakedoesnotexist.utils.plotting import plot_real_syn_bucket
 from thisquakedoesnotexist.utils.random_fields import rand_noise, uniform_noise
 from thisquakedoesnotexist.utils.tracking import log_model_mlflow
 from thisquakedoesnotexist.utils.tracking import log_params_mlflow
 from thisquakedoesnotexist.models.gan import Discriminator, Generator
-from thisquakedoesnotexist.utils.data_utils import SeisData
+from thisquakedoesnotexist.utils.data_utils import SeisData, set_up_folders
 
 sns.set()
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -33,59 +33,6 @@ cuda = True if torch.cuda.is_available() else False
 device = torch.device("cuda" if cuda else "cpu")
 print(f"Running on device: {device}")
 Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
-
-
-def set_up_folders(conf_d, run_id):
-    """
-    Output configurations dictionary and create data directory
-    """
-    output_dir = conf_d.output_dir + "_" + str(run_id)
-    model_file = conf_d.model_file
-
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-
-    # create diretory for models
-    models_dir = os.path.join(output_dir, "models")
-    if not os.path.exists(models_dir):
-        os.makedirs(models_dir)
-
-    # create directory for figures
-    syn_data_dir = os.path.join(output_dir, "syn_data")
-    if not os.path.exists(syn_data_dir):
-        os.makedirs(syn_data_dir)
-
-    fig_dir = os.path.join(output_dir, "figs")
-    if not os.path.exists(fig_dir):
-        os.makedirs(fig_dir)
-
-    # create dir for stats
-    tt_stats_dir = os.path.join(output_dir, "time_stats")
-    if not os.path.exists(tt_stats_dir):
-        os.makedirs(tt_stats_dir)
-
-    # make a copy of gan.py which contains the model specifications
-    model_file_name = model_file.split("/")[-1]
-    gan_out = os.path.join(output_dir, model_file_name)
-    shutil.copyfile(model_file, gan_out)
-    return output_dir, models_dir, fig_dir, tt_stats_dir
-
-
-@dataclass(init=True, repr=True)
-class ConditionalVariables(object):
-    """Dataclass to hold min, maxConditionalVariablesDocstring for ClassName."""
-    dist_min: float
-    dist_max: float
-    dist_step_size: float
-    dist_bins: np.ndarray
-    mag_min: float
-    mag_max: float
-    mag_step_size: float
-    mag_bins: np.ndarray
-    vs30_min: float
-    vs30_max: float
-    vs30_step_size: float
-    vs30_bins: np.ndarray
 
 
 def get_cond_var_bins(dataset, num_bins=10, no_vs30=False):
@@ -116,7 +63,7 @@ def get_cond_var_bins(dataset, num_bins=10, no_vs30=False):
     return {'dist_bins': dist_bins, 'mag_bins': mag_bins, 'vs30_bins': vs30_bins}
 
 
-def calc_mean_distances(dataset, wfs, c_norms, means, samples, noise_dim):
+def calc_mean_distances(G, dataset, wfs, c_norms, means, samples, noise_dim):
     c_norms = c_norms.reshape(-1, 1)
     real_data = wfs * c_norms
     real_data_mean = np.mean(real_data, axis=0)
@@ -151,7 +98,7 @@ def calc_mean_distances(dataset, wfs, c_norms, means, samples, noise_dim):
     return (l2_dist, mse)
 
 
-def plot_metrics_matrix(dataset, vc_bins, fig_dir):
+def plot_metrics_matrix(G, dataset, vc_bins, dirs, args):
     dist_bin_centers = []
     mag_bin_centers = []
 
@@ -159,7 +106,10 @@ def plot_metrics_matrix(dataset, vc_bins, fig_dir):
     mag_bins = vc_bins['mag_bins']
     vs30_bins = vc_bins['vs30_bins']
 
-    for i in range(10):
+    n_dist_bins = len(dist_bins) - 1 
+    n_mag_bins = len(mag_bins) - 1
+
+    for i in range(min(n_dist_bins, n_mag_bins)):
         dist_border = [dist_bins[i], dist_bins[i+1]]
         mag_border = [mag_bins[i], mag_bins[i+1]]
         wfs, c_norms, means, n_obs = get_waves_real_bin(dataset, dist_border, mag_border, vs30_bins)
@@ -168,20 +118,25 @@ def plot_metrics_matrix(dataset, vc_bins, fig_dir):
 
     l2_mat = np.full((10, 10), np.nan)
     mse_mat = np.full((10, 10), np.nan)
+    
+    dist_max = dataset.df_meta['dist'].max()
+    mag_max = dataset.df_meta['mag'].max()
+    vs30_max = dataset.df_meta['vs30'].max()
 
-    for i in range(10):
-        for j in range(10):
+    for i in range(n_dist_bins):
+        for j in range(n_mag_bins):
             dist_border = [dist_bins[i], dist_bins[i+1]]
             mag_border = [mag_bins[j], mag_bins[j+1]]
             wfs, c_norms, means, n_obs = get_waves_real_bin(dataset, dist_border, mag_border, vs30_bins)
             
             if n_obs < 25:
-                print(f"Bucket [{i}, {j}] only contains {n_obs} waveforms. Skipping ...")
-                print(dist_border, mag_border)
-                continue
+                print(f"Bucket [{i}, {j}] only contains {n_obs} waveforms.")
+                print(f"Dist: [{dist_border[0]:.2f}, {dist_border[1]:.2f}], Mag: [{mag_border[0]:.2f}, {mag_border[1]:.2f}]")
+                # continue
             
-            # plot_real_syn_bucket(wfs, c_norms, means, n_obs, dist_border, mag_border)
-            l2, mse = calc_mean_distances(wfs, c_norms, means, n_obs, dist_border, mag_border)
+            plot_real_syn_bucket(G, wfs, c_norms, means, n_obs, dist_border, mag_border, dirs, dist_max, mag_max, vs30_max, device, args)
+            l2, mse = calc_mean_distances(G, dataset, wfs, c_norms, means, n_obs, args.noise_dim)
+            
             l2_mat[i, j] = l2
             mse_mat[i, j] = mse
             
@@ -190,22 +145,30 @@ def plot_metrics_matrix(dataset, vc_bins, fig_dir):
     ax.invert_yaxis()
     plt.xlabel('Bin Mean Magnitude')
     plt.ylabel('Bin Mean Distance [km]')
-    fig_file = os.path.join(fig_dir, f"l2_metric_matrix.png")
-    plt.savefig(fig_file, format="png")
+    fig_file = os.path.join(dirs['metrics_dir'], f"l2_metric_matrix.{args.plot_format}")
+    plt.savefig(fig_file, format=f"{args.plot_format}")
+    plt.clf()
+    plt.cla()
 
     plt.title('Log-MSE Distance Real-Synthetic Data')
     ax = sns.heatmap(np.log(mse_mat), xticklabels=mag_bin_centers, yticklabels=dist_bin_centers)
     ax.invert_yaxis()
     plt.xlabel('Bin Mean Magnitude')
     plt.ylabel('Bin Mean Distance [km]')
-    fig_file = os.path.join(fig_dir, f"mse_metric_matrix.png")
-    plt.savefig(fig_file, format="png")
+    fig_file = os.path.join(dirs['metrics_dir'], f"mse_metric_matrix.{args.plot_format}")
+    plt.savefig(fig_file, format=f"{args.plot_format}")
+    plt.clf()
+    plt.cla()
+    return (l2_mat, mse_mat)
 
 
-def evaluate_model(G, n_waveforms, dataset, noise_dim, lt, dt, fig_dir):
+def evaluate_model(G, n_waveforms, dataset, dirs, epoch, args):
+    fig_dir = dirs['fig_dir']
+    metrics_dir = dirs['metrics_dir']
+    grid_dir = dirs['grid_dir']
     assert dataset.vc_min["dist"] == dataset.df_meta['dist'].min()
 
-    cond_var_bins = get_cond_var_bins(dataset, 10, True)
+    cond_var_bins = get_cond_var_bins(dataset, 10, args.no_vs30_bins)
 
     n_rows = 8
     n_cols = 4
@@ -225,16 +188,24 @@ def evaluate_model(G, n_waveforms, dataset, noise_dim, lt, dt, fig_dir):
     dists = [dist_min, dist_mean, dist_max]
     mags = [mag_min, mag_mean, mag_max]
 
+    l2_mat, mse_mat = plot_metrics_matrix(G, dataset, cond_var_bins, dirs, args)
+    mlflow.log_metric(key="l2_total", value=np.sum(l2_mat), step=epoch)
+    mlflow.log_metric(key="mse_total", value=np.sum(mse_mat), step=epoch)
+    mlflow.log_metric(key="l2_avg", value=np.sum(l2_mat) / l2_mat.size, step=epoch)
+    mlflow.log_metric(key="mse_avg", value=np.sum(mse_mat) / mse_mat.size, step=epoch)
+
     for dist in dists:
-        for mag in cond_var_bins['mag_bins']:
+        for i, mag in enumerate(cond_var_bins['mag_bins']):
+            if i % 2 != 0:
+                continue
             vc_list = [
-                dist / dist_max * torch.ones(samples, 1).cuda(),
-                mag / mag_max * torch.ones(samples, 1).cuda(),
-                vs30_mean / vs30_max * torch.ones(samples, 1).cuda(),
+                dist / dist_max * torch.ones(n_waveforms, 1).cuda(),
+                mag / mag_max * torch.ones(n_waveforms, 1).cuda(),
+                vs30_mean / vs30_max * torch.ones(n_waveforms, 1).cuda(),
             ]
 
-            grf = rand_noise(1, noise_dim, device=device)
-            random_data = grf.sample(samples)
+            grf = rand_noise(1, args.noise_dim, device=device)
+            random_data = grf.sample(n_waveforms)
             syn_data, syn_scaler = G(random_data, *vc_list)
             syn_data = syn_data.squeeze().detach().cpu().numpy()
             syn_data = syn_data * syn_scaler.detach().cpu().numpy()
@@ -245,25 +216,28 @@ def evaluate_model(G, n_waveforms, dataset, noise_dim, lt, dt, fig_dir):
             y = np.exp(sd_mean)
 
             nt = synthetic_data_log.shape[1]
-            tt = dt * np.arange(0, nt)
-            plt.semilogy(tt, y, '-' , label=f'Dist: {dist}km, Mag: {mag}', alpha=0.8, lw=0.5)
+            tt = args.time_delta * np.arange(0, nt)
+            plt.semilogy(tt, y, '-' , label=f'Dist: {dist:.2f}km, Mag: {mag:.2f}', alpha=0.8, lw=0.5)
 
         plt.legend()
         plt.xlabel('Time [s]')
         plt.ylabel('Log-Amplitude')
-        fig_file = os.path.join(fig_dir, f"syn_data_mag_dependence_dist_{dist}.png")
-        plt.savefig(fig_file, format="png")
+        fig_file = os.path.join(fig_dir, f"syn_data_mag_dependence_dist_{dist:.2f}.{args.plot_format}")
+        plt.savefig(fig_file, format=f"{args.plot_format}")
+        plt.clf()
 
     for mag in mags:
-        for dist in cond_var_bins['dist_bins']:
+        for i, dist in enumerate(cond_var_bins['dist_bins']):
+            if i % 2 != 0:
+                continue
             vc_list = [
-                dist / dist_max * torch.ones(samples, 1).cuda(),
-                mag / mag_max * torch.ones(samples, 1).cuda(),
-                vs30_mean / vs30_max * torch.ones(samples, 1).cuda(),
+                dist / dist_max * torch.ones(n_waveforms, 1).cuda(),
+                mag / mag_max * torch.ones(n_waveforms, 1).cuda(),
+                vs30_mean / vs30_max * torch.ones(n_waveforms, 1).cuda(),
             ]
 
-            grf = rand_noise(1, noise_dim, device=device)
-            random_data = grf.sample(samples)
+            grf = rand_noise(1, args.noise_dim, device=device)
+            random_data = grf.sample(n_waveforms)
             syn_data, syn_scaler = G(random_data, *vc_list)
             syn_data = syn_data.squeeze().detach().cpu().numpy()
             syn_data = syn_data * syn_scaler.detach().cpu().numpy()
@@ -274,14 +248,15 @@ def evaluate_model(G, n_waveforms, dataset, noise_dim, lt, dt, fig_dir):
             y = np.exp(sd_mean)
 
             nt = synthetic_data_log.shape[1]
-            tt = dt * np.arange(0, nt)
-            plt.semilogy(tt, y, '-' , label=f'Dist: {dist}km, Mag: {mag}', alpha=0.8, lw=0.5)
+            tt = args.time_delta * np.arange(0, nt)
+            plt.semilogy(tt, y, '-' , label=f'Dist: {dist:.2f}km, Mag: {mag:.2f}', alpha=0.8, lw=0.5)
 
         plt.legend()
         plt.xlabel('Time [s]')
         plt.ylabel('Log-Amplitude')
-        fig_file = os.path.join(fig_dir, f"syn_data_dist_dependence_mag_{dist}.png")
-        plt.savefig(fig_file, format="png")
+        fig_file = os.path.join(fig_dir, f"syn_data_dist_dependence_mag_{mag:.2f}.{args.plot_format}")
+        plt.savefig(fig_file, format=f"{args.plot_format}")
+        plt.clf()
 
     for dist, mag in itertools.product(dists, mags):
         vc_list = [
@@ -289,6 +264,7 @@ def evaluate_model(G, n_waveforms, dataset, noise_dim, lt, dt, fig_dir):
                 mag / mag_max * torch.ones(n_tot, 1).cuda(),
                 vs30_mean / vs30_max * torch.ones(n_tot, 1).cuda(),
         ]
+        grf = rand_noise(1, args.noise_dim, device=device)
         random_data = grf.sample(n_tot)
         syn_data, syn_scaler = G(random_data, *vc_list)
         syn_data = syn_data.squeeze()
@@ -298,7 +274,7 @@ def evaluate_model(G, n_waveforms, dataset, noise_dim, lt, dt, fig_dir):
         syn_data = syn_data * syn_scaler
 
         n_t = syn_data.shape[1]
-        tt = dt * np.arange(0, n_t)
+        tt = args.time_delta * np.arange(0, n_t)
 
         plt.figure()
         fig, axs = plt.subplots(n_rows, n_cols, sharex='col',
@@ -313,34 +289,41 @@ def evaluate_model(G, n_waveforms, dataset, noise_dim, lt, dt, fig_dir):
         plt.ylabel("Amplitude", labelpad=10.0)
 
         for i, ax in enumerate(axs.flat):
-            # ax.set_ylim((-1, 1))
-            # ax.set_aspect('equal', 'box')
             ax.plot(tt, syn_data[i, :], linewidth=0.5)
             low, high = ax.get_ylim()
             bound = max(abs(low), abs(high))
             ax.set_ylim(-bound, bound)
             
         # plt.tight_layout(pad=0.2)
-        fig.suptitle(f'Randomly drawn samples from Generator. Dist: {dist:.1f} km, Mag: {mag:.1f}')
-        fig_file = os.path.join(fig_dir, f"generated_data_{dist:.1f}_km_mag_{mag:.1f}.png")
-        plt.savefig(fig_file, format="png")
+        fig.suptitle(f'Randomly drawn samples from Generator. Dist: {dist:.2f} km, Mag: {mag:.2f}')
+        fig_file = os.path.join(dirs['grid_dir'], f"generated_data_{dist:.2f}_km_mag_{mag:.2f}.{args.plot_format}")
+        plt.savefig(fig_file, format=f"{args.plot_format}")
+        plt.clf()
+        plt.cla()
 
         vs30 = vs30_mean
-        samples = get_syntetic_data(
+        samples = get_synthetic_data(
             G,
             n_waveforms,
             dataset,
-            noise_dim,
             dist,
             mag,
-            vs30
+            vs30,
+            args
         )
-        plot_syn_data_grid(samples, dt, dist, mag, vs30, fig_dir)
-        plot_syn_data_single(samples, dt, lt, dist, mag, vs30, fig_dir)
+        
+        # plot_syn_data_grid(samples, dt, dist, mag, vs30, fig_dir)
+        plot_syn_data_single(samples, dist, mag, vs30, fig_dir, args)
+
+    # mlflow.log_artifacts(f"{dirs['models_dir']}", f"{dirs['output_dir']}/models")
+    # mlflow.log_artifacts(f"{dirs['training_dir']}", f"{dirs['output_dir']}/training_plots")
+    mlflow.log_artifacts(f"{dirs['fig_dir']}", f"{dirs['output_dir']}/figs")
+    mlflow.log_artifacts(f"{dirs['metrics_dir']}", f"{dirs['output_dir']}/metrics")
+    mlflow.log_artifacts(f"{dirs['grid_dir']}", f"{dirs['output_dir']}/grid_plots")
 
 
-def get_syntetic_data(G, n_waveforms, sdat_train, noise_dim, dist, mag, vs30):
-    """get_syntetic_data returns n=n_waveforms number of synthetic waveforms for the corresponding conditional variables.
+def get_synthetic_data(G, n_waveforms, sdat_train, dist, mag, vs30, args):
+    """get_synthetic_data returns n=n_waveforms number of synthetic waveforms for the corresponding conditional variables.
 
     _extended_summary_
 
@@ -376,7 +359,7 @@ def get_syntetic_data(G, n_waveforms, sdat_train, noise_dim, dist, mag, vs30):
         vs30 / vs30_max * torch.ones(samples, 1).cuda(),
     ]
 
-    grf = rand_noise(1, noise_dim, device=device)
+    grf = rand_noise(1, args.noise_dim, device=device)
     z = grf.sample(samples)
 
     G.eval()
@@ -384,7 +367,6 @@ def get_syntetic_data(G, n_waveforms, sdat_train, noise_dim, dist, mag, vs30):
 
     x_g = x_g.squeeze().detach().cpu()
     x_scaler = x_scaler.squeeze().detach().cpu()
-
 
     good_samples = []
     for wf, scaler in zip(x_g, x_scaler):
@@ -398,38 +380,40 @@ def get_syntetic_data(G, n_waveforms, sdat_train, noise_dim, dist, mag, vs30):
     return good_samples[:n_waveforms]
 
 
-def get_waves_real_bin(s_dat, distbs, mbs, vsb):
+def get_waves_real_bin(s_dat, distbs, mbs, vsb, verbose=0):
     # get dataframe with attributes
     df = s_dat.df_meta
     # get waves
     wfs = s_dat.wfs
     cnorms = s_dat.cnorms
-    print(df.shape)
+    # print(df.shape)
     # select bin of interest
-    ix = (
-        (distbs[0] <= df["dist"])
-        & (df["dist"] < distbs[1])
-        & (mbs[0] <= df["mag"])
-        & (df["mag"] <= mbs[1])
-        & (vsb[0] <= df["vs30"])
-        & (df["vs30"] < vsb[1])
-    )
+    ix = ((distbs[0] <= df['dist']) & (df['dist'] < distbs[1]) &
+          (mbs[0] <= df['mag']) & (df['mag'] <= mbs[1]) &
+          (vsb[0] <= df['vs30']) & (df['vs30'] < vsb[1]))
 
     # get normalization coefficients
     df_s = df[ix]
     # get waveforms
-    ws_r = wfs[ix, :, :]
-    c_r = cnorms[ix, :]
-    Nobs = ix.sum()
-    print("# observations", Nobs)
-    print("MAG: {:.2f}".format(df_s["mag"].min(), df_s["mag"].max()))
-    print("DIST: {:.2f}".format(df_s["dist"].min(), df_s["dist"].max()))
-    print("Vs30: {:.2f}".format(df_s["vs30"].min(), df_s["vs30"].max()))
-    print("MAG Mean: {:.2f}".format(df_s["mag"].mean()))
-    print("DIST Mean: {:.2f}".format(df_s["dist"].mean()))
-    print("Vs30 Mean: {:.2f}".format(df_s["vs30"].mean()))
+    ws_r = wfs[ix, :]
+    c_r = cnorms[ix]
+    n_obs = ix.sum()
 
-    return (ws_r, c_r)
+    means = {'dist': df_s['dist'].mean(),
+             'mag': df_s['mag'].mean(),
+             'vs30': df_s['vs30'].mean()}
+    if verbose:
+        print('# observations', n_obs)
+        print(f"Mag range: [{df_s['mag'].min():.2f}, {df_s['mag'].max():.2f})")
+        print(f"Mag mean: {df_s['mag'].mean():.2f}")
+
+        print(f"Dist range: [{df_s['dist'].min():.2f}, {df_s['dist'].max():.2f})")
+        print(f"Mag mean: {df_s['dist'].mean():.2f}")
+
+        print(f"Vs30 range: [{df_s['vs30'].min():.2f}, {df_s['vs30'].max():.2f})")
+        print(f"Vs30 mean: {df_s['vs30'].mean():.2f}")
+      
+    return (ws_r, c_r, means, n_obs)
 
 
 def main():
@@ -450,11 +434,12 @@ def main():
     nbins_dict = {
         "dist": args.n_cond_bins,
         "mag": args.n_cond_bins,
-        "vs30": 1 # TODO: implement argument for vs30 on/off ||args.n_cond_bins
+        "vs30": args.n_cond_bins * (1 - args.no_vs30_bins) + args.no_vs30_bins
     }
+    print(f"Conditioanl Variable Bins: {nbins_dict}")
 
-    out_dir, model_dir, fig_dir, tt_stats_dir = set_up_folders(args, run_id)
-    print(f"Output directory: {out_dir}\nModel directory: {model_dir}")
+    dirs = set_up_folders(run_id, args)
+    print(f"Output directory: {dirs['output_dir']}\nModel directory: {dirs['models_dir']}")
 
     # total number of training samples
     f = np.load(args.data_file)
@@ -471,6 +456,15 @@ def main():
     ix_val = np.setdiff1d(ix_all, ix_train, assume_unique=True)
     ix_val.sort()
     
+    sdat_all = SeisData(
+        data_file=args.data_file,
+        attr_file=args.attr_file,
+        batch_size=args.batch_size,
+        sample_rate=args.sample_rate,
+        v_names=condv_names,
+        isel=ix_all,
+    )
+
     sdat_train = SeisData(
         data_file=args.data_file,
         attr_file=args.attr_file,
@@ -502,25 +496,22 @@ def main():
     # Create optimizers for the discriminator and generator
     d_optimizer = optim.Adam(
         D.parameters(),
-        lr=args.lr,
+        lr=args.learning_rate,
         betas=[args.beta1, args.beta2]
     )
     g_optimizer = optim.Adam(
         G.parameters(),
-        lr=args.lr,
+        lr=args.learning_rate,
         betas=[args.beta1, args.beta2]
     )
 
-    # keep track of loss and generated, "fake" samples
     losses_train = []
     losses_val = []
 
-    # weigth for gradient penalty regunlarizer
+    # weigth for gradient penalty regularizer
     reg_lambda = args.gp_lambda
 
-    # batch size
     batch_size = sdat_train.get_batch_size()
-
     n_train_btot = sdat_train.get_Nbatches_tot()
     n_val_btot = sdat_val.get_Nbatches_tot()
 
@@ -548,6 +539,9 @@ def main():
         D.train()
 
         n_critic = args.n_critic
+
+        # TODO: REMOVE THIS AGAIN
+        # n_train_btot = 1
         for i_batch in range(n_train_btot):
             for i_c in range(n_critic):
                 ### ---------- DISCRIMINATOR STEP ---------------
@@ -701,10 +695,6 @@ def main():
         # store losses
         losses_val.append((d_val_wloss, d_val_gploss, g_val_loss))
 
-        # save generator
-        fmodel = os.path.join(model_dir, "model_G_epoch_" + str(i_epoch) + ".pth")
-        torch.save({"state_dict": G.state_dict()}, fmodel)
-
         # --------- End training epoch -----------
         # save losses
         # store train losses
@@ -719,8 +709,6 @@ def main():
         )
         mlflow.log_metric(key="g_train_loss", value=g_loss_ep[i_epoch], step=i_epoch)
 
-        distance = 60
-
         G.eval()
         z = uniform_noise(batch_size, args.noise_dim)
         z = torch.from_numpy(z).float()
@@ -734,30 +722,33 @@ def main():
 
         (x_g, fake_lcn) = G(z, *i_vg)
 
-        x_g = x_g.squeeze()
-        x_g = x_g.detach().cpu()
-        fig_file = os.path.join(f"{out_dir}/syn_data", f"syn_ep_{i_epoch+1:05}.png")
-        stl = f"Epoch: {i_epoch+1}, dist = {distance} km"
+        x_g = x_g.squeeze().detach().cpu().numpy()
+        x_g = x_g * fake_lcn.detach().cpu().numpy()
+        fig_file = os.path.join(f"{dirs['training_dir']}", f"syn_ep_{i_epoch+1:05}.{args.plot_format}")
+        stl = f"Randomly Generated Waveforms, Epoch: {i_epoch+1}"
+
         plot_waves_1C(
+            sdat_all,
             x_g,
-            args.dt,
-            ylim=(-1, 1),
-            t_max=args.dt * args.lt,
+            i_vg,
+            args,
+            t_max=args.time_delta * args.discriminator_size,
             show_fig=False,
             fig_file=fig_file,
             stitle=stl,
         )
         # store model
-        fmodel = os.path.join(model_dir, f"model_G_epoch_{i_epoch:05}.pth")
-        torch.save({"state_dict": G.state_dict()}, fmodel)
+        # fmodel = os.path.join(dirs['models_dir'], f"model_G_epoch_{i_epoch + 1:05}.pth")
+        # torch.save({"state_dict": G.state_dict()}, fmodel)
 
         # plot validation statistics
-        fig_file = os.path.join(tt_stats_dir, f"val_plots_{i_epoch}.png")
+        # fig_file = os.path.join(tt_stats_dir, f"val_plots_{i_epoch}.{args.plot_format}")
 
         # back to train mode
         G.train()
 
-        mlflow.log_artifacts(f"{out_dir}/syn_data", "syn_data")
+        mlflow.log_artifacts(f"{dirs['training_dir']}", f"{dirs['training_dir']}")
+        
 
         # ----------- Validation Loop --------------
         G.eval()
@@ -833,13 +824,7 @@ def main():
                 only_inputs=True,
             )[0]
             # concatenate grad vectors
-            grads = torch.cat(
-                [
-                    grads_wf,
-                    grads_cn,
-                ],
-                1,
-            )
+            grads = torch.cat([grads_wf, grads_cn], 1)
 
             # 4. Compute losses
             d_gp_loss = reg_lambda * ((grads.norm(2, dim=1) - 1) ** 2).mean()
@@ -885,23 +870,63 @@ def main():
         # store losses
         losses_val.append((d_val_wloss, d_val_gploss, g_val_loss))
         ### --------- End Validation -------
-        # AFTER EACH EPOCH #
-        if i_epoch % args.print_freq == 0:
-            # save generator
-            fmodel = os.path.join(model_dir, f"model_G_epoch_{i_epoch:05}.pth")
-            torch.save({"state_dict": G.state_dict()}, fmodel)
         if (i_epoch + 1) % 10 == 0:
-            mlflow.pytorch.save_model(G, f"{out_dir}/model_epoch_{i_epoch + 1:05}")
-            mlflow.pytorch.log_model(G, f"{out_dir}/model_epoch_{i_epoch + 1:05}")
+            save_loc_epoch = f"{dirs['output_dir']}/model_epoch_{i_epoch + 1:05}"
+            mlflow.pytorch.save_model(G, save_loc_epoch)
+            mlflow.pytorch.log_model(G, save_loc_epoch)
+
+            # models_dir = os.path.join(save_loc_epoch, "models")
+            # if not os.path.exists(models_dir):
+            #     os.makedirs(models_dir)
+
+            # # create directory for figures
+            # training_dir = os.path.join(save_loc_epoch, "training_plots")
+            # if not os.path.exists(training_dir):
+            #     os.makedirs(training_dir)
+
+            metrics_dir = os.path.join(save_loc_epoch, "metrics")
+            if not os.path.exists(metrics_dir):
+                os.makedirs(metrics_dir)
+
+            grid_dir = os.path.join(save_loc_epoch, "grid_plots")
+            if not os.path.exists(grid_dir):
+                os.makedirs(grid_dir)
+
+            fig_dir = os.path.join(save_loc_epoch, "figs")
+            if not os.path.exists(fig_dir):
+                os.makedirs(fig_dir)
+                
+            epoch_loc_dirs = {
+                "output_dir": save_loc_epoch,
+                # "models_dir": models_dir,
+                # "training_dir": training_dir,
+                "metrics_dir": metrics_dir,
+                "grid_dir": grid_dir,
+                "fig_dir": fig_dir,
+                # "models_dir": f"{save_loc_epoch}/models",
+                # "training_dir": f"{save_loc_epoch}/training_plots",
+                # "fig_dir": f"{save_loc_epoch}/figs",
+                # "metrics_dir": f"{save_loc_epoch}/metrics",
+                # "grid_dir": f"{save_loc_epoch}/grid_plots",
+            }
+            
+            n_waveforms = 72 * 5
+            evaluate_model(
+                G,
+                n_waveforms,
+                sdat_all,
+                epoch_loc_dirs,
+                i_epoch,
+                args
+            )
+
 
     # back to train mode
     G.train()
 
-    mlflow.log_artifacts(f"{out_dir}/syn_data", "syn_data")
-
     # make lot of losses
     iep = np.arange(1, 1 + args.epochs)
-    fig_file = os.path.join(out_dir, f"figs/gan_losses.png")
+    fig_file = os.path.join(dirs['training_dir'], f"/gan_losses.{args.plot_format}")
     plt.figure(figsize=(8, 6))
     plt.plot(iep, d_wloss_ep, color="C0", label="W Distance")
     plt.plot(iep, d_total_loss_ep, color="C1", label="D Loss")
@@ -909,25 +934,26 @@ def main():
     plt.legend()
     plt.ylabel("W Losses")
     plt.xlabel("Epoch")
-    plt.title("Wasserstein GAN 1D Fourier, 1C")
-    plt.savefig(fig_file, format="png")
+    plt.title("Wasserstein GAN 1D, 1C")
+    plt.savefig(fig_file, format=f"{args.plot_format}")
+    plt.clf()
+    plt.cla()
 
-    mlflow.pytorch.save_model(G, f"{out_dir}/model")
-    mlflow.pytorch.log_model(G, f"{out_dir}/model")
+    mlflow.log_artifact(fig_file, f"{dirs['training_dir']}")
+
+    mlflow.pytorch.save_model(G, f"{dirs['output_dir']}/model_final")
+    mlflow.pytorch.log_model(G, f"{dirs['output_dir']}/model_final")
 
     n_waveforms = 72 * 5
 
     evaluate_model(
         G,
         n_waveforms,
-        args.n_cond_bins,
-        sdat_train,
-        args.noise_dim,
-        args.lt,
-        args.dt,
-        fig_dir,
+        sdat_all,
+        dirs,
+        i_epoch,
+        args
     )
-    mlflow.log_artifacts(f"{out_dir}/figs", "figs")
 
 
 if __name__ == "__main__":

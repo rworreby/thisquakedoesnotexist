@@ -3,6 +3,7 @@
 import os
 
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import seaborn as sns
 import torch
@@ -10,7 +11,7 @@ import torch
 from thisquakedoesnotexist.utils.random_fields import rand_noise
 
 sns.set()
-
+mpl.use('Agg')
 
 def _rolling_window(x, window_len, step_length):
     pos = 0
@@ -110,7 +111,7 @@ def plot_syn_data_single(samples, dist, mag, vs30, fig_dir, args):
 
         fig_file = os.path.join(fig_dir, f'synthetic_data_plot_{dist:.2f}_km_mag_{mag:.2f}.{args.plot_format}')
         plt.savefig(fig_file, format=f'{args.plot_format}')
-        plt.close()
+        plt.close('all')
         plt.clf()
         plt.cla()
         
@@ -143,6 +144,7 @@ def plot_syn_data_grid(samples, dist, mag, vs30, fig_dir, args):
     fig.suptitle(f'Randomly drawn samples from Generator. Dist: {dist:.2f} km, Mag: {mag:.2f}.')
     fig_file = os.path.join(fig_dir, f'synthetic_data_grid_plot_dist_{dist:.2f}_mag_{mag:.2f}.{args.plot_format}')
     plt.savefig(fig_file, format=f'{args.plot_format}')
+    plt.close('all')
     plt.clf()
     plt.cla()
 
@@ -201,6 +203,7 @@ def plot_real_syn_bucket(G, wfs, c_norms, means, n_obs, dist_border, mag_border,
     plt.title(f"Obs: {n_obs}, Dist: [{dist_border[0]:.1f},{dist_border[1]:.1f}] km, Mag: [{mag_border[0]:.1f},{mag_border[1]:.1f}]")
     fig_file = os.path.join(dirs['metrics_dir'], f'synthetic_real_comp_dist_{dist:3,.2f}_mag_{mag:.2f}.{args.plot_format}')
     plt.savefig(fig_file, format=f'{args.plot_format}')
+    plt.close('all')
     plt.clf()
     plt.cla()
 
@@ -271,4 +274,4 @@ def plot_waves_1C(dataset, ws, i_vg, args, t_max=50.0, ylim=None, fig_file=None,
         fig.show()
     plt.clf()
     plt.cla()
-    plt.close()
+    plt.close('all')

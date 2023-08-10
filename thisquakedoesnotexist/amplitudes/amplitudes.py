@@ -5,6 +5,7 @@ import itertools
 import os
 from argparse import ArgumentParser
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
@@ -28,6 +29,7 @@ from thisquakedoesnotexist.models.gan import Discriminator, Generator
 from thisquakedoesnotexist.utils.data_utils import SeisData, set_up_folders
 
 sns.set()
+mpl.use('Agg')
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 cuda = True if torch.cuda.is_available() else False
 device = torch.device("cuda" if cuda else "cpu")
@@ -147,6 +149,7 @@ def plot_metrics_matrix(G, dataset, vc_bins, dirs, args):
     plt.ylabel('Bin Mean Distance [km]')
     fig_file = os.path.join(dirs['metrics_dir'], f"l2_metric_matrix.{args.plot_format}")
     plt.savefig(fig_file, format=f"{args.plot_format}")
+    plt.close('all')
     plt.clf()
     plt.cla()
 
@@ -157,6 +160,7 @@ def plot_metrics_matrix(G, dataset, vc_bins, dirs, args):
     plt.ylabel('Bin Mean Distance [km]')
     fig_file = os.path.join(dirs['metrics_dir'], f"mse_metric_matrix.{args.plot_format}")
     plt.savefig(fig_file, format=f"{args.plot_format}")
+    plt.close('all')
     plt.clf()
     plt.cla()
     return (l2_mat, mse_mat)
@@ -224,7 +228,9 @@ def evaluate_model(G, n_waveforms, dataset, dirs, epoch, args):
         plt.ylabel('Log-Amplitude')
         fig_file = os.path.join(fig_dir, f"syn_data_mag_dependence_dist_{dist:.2f}.{args.plot_format}")
         plt.savefig(fig_file, format=f"{args.plot_format}")
+        plt.close('all')
         plt.clf()
+        plt.cla()
 
     for mag in mags:
         for i, dist in enumerate(cond_var_bins['dist_bins']):
@@ -256,7 +262,9 @@ def evaluate_model(G, n_waveforms, dataset, dirs, epoch, args):
         plt.ylabel('Log-Amplitude')
         fig_file = os.path.join(fig_dir, f"syn_data_dist_dependence_mag_{mag:.2f}.{args.plot_format}")
         plt.savefig(fig_file, format=f"{args.plot_format}")
+        plt.close('all')
         plt.clf()
+        plt.cla()
 
     for dist, mag in itertools.product(dists, mags):
         vc_list = [
@@ -298,6 +306,7 @@ def evaluate_model(G, n_waveforms, dataset, dirs, epoch, args):
         fig.suptitle(f'Randomly drawn samples from Generator. Dist: {dist:.2f} km, Mag: {mag:.2f}')
         fig_file = os.path.join(dirs['grid_dir'], f"generated_data_{dist:.2f}_km_mag_{mag:.2f}.{args.plot_format}")
         plt.savefig(fig_file, format=f"{args.plot_format}")
+        plt.close('all')
         plt.clf()
         plt.cla()
 
@@ -541,7 +550,7 @@ def main():
         n_critic = args.n_critic
 
         # TODO: REMOVE THIS AGAIN
-        # n_train_btot = 1
+        n_train_btot = 1
         for i_batch in range(n_train_btot):
             for i_c in range(n_critic):
                 ### ---------- DISCRIMINATOR STEP ---------------
@@ -936,6 +945,7 @@ def main():
     plt.xlabel("Epoch")
     plt.title("Wasserstein GAN 1D, 1C")
     plt.savefig(fig_file, format=f"{args.plot_format}")
+    plt.close('all')
     plt.clf()
     plt.cla()
 

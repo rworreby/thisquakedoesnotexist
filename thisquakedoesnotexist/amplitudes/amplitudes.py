@@ -247,7 +247,7 @@ def evaluate_model(G, n_waveforms, dataset, dirs, epoch, args):
     grid_dir = dirs['grid_dir']
     assert dataset.vc_min["dist"] == dataset.df_meta['dist'].min()
 
-    cond_var_bins = get_cond_var_bins(dataset, 6, args.no_vs30_bins)
+    cond_var_bins = get_cond_var_bins(dataset, 10, args.no_vs30_bins)
 
     n_rows = 8
     n_cols = 4
@@ -378,7 +378,6 @@ def evaluate_model(G, n_waveforms, dataset, dirs, epoch, args):
         plt.close('all')
         plt.clf()
         plt.cla()
-        plt.close()
 
         samples = get_synthetic_data(
             G,

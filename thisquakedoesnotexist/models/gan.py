@@ -31,7 +31,6 @@ class Discriminator(nn.Module):
         #  get embeddings for the conditional variables
         self.embed1 = embed(1, 1000)
         self.embed2 = embed(1, 1000)
-        self.embed3 = embed(1, 1000)
 
         # embedding for normalization constant
         self.nn_cnorm = embed(1, 1000)
@@ -40,7 +39,7 @@ class Discriminator(nn.Module):
         # concatenate conditional variables | (6, 4000, 1) out
         # (Chan,H,W)
         # (7,4000,1) input 2-D tensor input
-        self.conv1 = nn.Conv2d(5, 16, kernel_size=(32, 1), stride=(2, 1), padding=(15, 0), )
+        self.conv1 = nn.Conv2d(4, 16, kernel_size=(32, 1), stride=(2, 1), padding=(15, 0), )
         # (16,2000,1) out | apply F.leaky_relu
         self.conv1b = nn.Conv2d(16, 16, kernel_size=(31, 1), stride=(1, 1), padding=(15, 0), )
         # (16,2000,1) out | apply F.leaky_relu
@@ -75,7 +74,7 @@ class Discriminator(nn.Module):
         self.fc2 = nn.Linear(256 * 100, 1)
         # (1) out
 
-    def forward(self, x, ln_cn, v1, v2, v3,):
+    def forward(self, x, ln_cn, v1, v2,):
         # print('--------------- Discriminator -------------')
 
         # conv2D + leaky relu activation
@@ -84,9 +83,6 @@ class Discriminator(nn.Module):
         #  apply embeddings for the conditional variables
         v1 = self.embed1(v1)
         v2 = self.embed2(v2)
-        v3 = self.embed3(v3)
-
-        # breakpoint()
 
         # embedding normalization factors
         ln_cn = self.nn_cnorm(ln_cn)
@@ -96,12 +92,11 @@ class Discriminator(nn.Module):
         # # reshape
         v1 = v1.view(-1, 1, 1000, 1)
         v2 = v2.view(-1, 1, 1000, 1)
-        v3 = v3.view(-1, 1, 1000, 1)
         ln_cn = ln_cn.view(-1, 1, 1000, 1)
         x = x.view(-1, 1, 1000, 1)
 
         # concatenate conditional variables to input
-        x = torch.cat([x, ln_cn, v1, v2, v3,], 1)
+        x = torch.cat([x, ln_cn, v1, v2,], 1)
         # print('torch.cat([x, ln_cn, v1, v2, v3,]', x.shape)
         
         x = self.conv1(x)
@@ -211,13 +206,12 @@ class Generator(nn.Module):
         #  ---- get embeddings for the conditional variables ----
         self.embed1 = embed(1, 150)
         self.embed2 = embed(1, 150)
-        self.embed3 = embed(1, 150)
 
         # ------------------------------------------------------
 
         # output after concatenating conditional variables: | (6, 150, 1) out
 
-        self.conv0 = nn.Conv2d(4, 6, kernel_size=(5, 1), stride=(1, 1), padding=(2, 0), )
+        self.conv0 = nn.Conv2d(3, 6, kernel_size=(5, 1), stride=(1, 1), padding=(2, 0), )
         # output: (6, 150, 1) | apply batchnorm
         self.batchnorm0 = nn.BatchNorm2d(6)
         # output: (6, 150, 1)
@@ -323,7 +317,7 @@ class Generator(nn.Module):
         self.fc_lcn = FCNC(n_vs=150, hidden_1=256, hidden_2=512)
         # output: (3)
 
-    def forward(self, x, v1, v2, v3,):
+    def forward(self, x, v1, v2,):
         # print('----------------- Generator -------------')
         # fully-connected + reshape
         # print('shape x init:', x.shape)
@@ -341,14 +335,12 @@ class Generator(nn.Module):
         #  apply embeddings for the conditional variables
         v1 = self.embed1(v1)
         v2 = self.embed2(v2)
-        v3 = self.embed3(v3)
 
         v1 = v1.view(-1, 1, 150, 1)
         v2 = v2.view(-1, 1, 150, 1)
-        v3 = v3.view(-1, 1, 150, 1)
 
         # concatenate conditional variables to input
-        x = torch.cat([x, v1, v2, v3,], 1)
+        x = torch.cat([x, v1, v2,], 1)
         # print('torch.cat([x, v1, v2, v3],1) shape: ', x.shape)
         # ------------------------------------------------
 
@@ -384,7 +376,7 @@ class Generator(nn.Module):
         xcn = xcn.reshape(-1, 3 * 50)
         # print('view(-1, 3 * 50):', xcn.shape)
         # get seed for waves
-        x = x[:,:,:250]
+        x = x[:, :, :250]
         # # print('x[:,:,:250] shape:', x.shape)
 
         # --------------------------------------------

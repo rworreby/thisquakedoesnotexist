@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
-from dataclasses import dataclass
+from argparse import ArgumentParser
 import itertools
 import os
-from argparse import ArgumentParser
+import shutil
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -13,19 +13,17 @@ import mlflow
 
 import torch
 from torch.autograd import Variable
-import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 
+from thisquakedoesnotexist.models.gan import Discriminator, Generator
 from thisquakedoesnotexist.utils.param_parser import ParamParser
-from thisquakedoesnotexist.utils.plotting import plot_syn_data_grid
+# from thisquakedoesnotexist.utils.plotting import plot_syn_data_grid
 from thisquakedoesnotexist.utils.plotting import plot_syn_data_single
 from thisquakedoesnotexist.utils.plotting import plot_waves_1C
 from thisquakedoesnotexist.utils.plotting import plot_real_syn_bucket
 from thisquakedoesnotexist.utils.random_fields import rand_noise, uniform_noise
-from thisquakedoesnotexist.utils.tracking import log_model_mlflow
+# from thisquakedoesnotexist.utils.tracking import log_model_mlflow
 from thisquakedoesnotexist.utils.tracking import log_params_mlflow
-from thisquakedoesnotexist.models.gan import Discriminator, Generator
 from thisquakedoesnotexist.utils.data_utils import SeisData, set_up_folders
 
 sns.set()
@@ -53,16 +51,98 @@ def get_cond_var_bins(dataset, num_bins=10, no_vs30=False):
     mag_bins = np.arange(
         mag_min, mag_max + mag_step_size / 2.0, step=mag_step_size
     )
+    
+    return {'dist_bins': dist_bins, 'mag_bins': mag_bins}
 
-    vs30_min = dataset.vc_min["vs30"] - 1e-5
-    vs30_max = dataset.vc_max["vs30"] + 1e-5
-    vs30_step_size = (vs30_max - vs30_min) / num_bins
-    if no_vs30:
-        vs30_step_size = vs30_max - vs30_min
-    vs30_bins = np.arange(
-        vs30_min, vs30_max + vs30_step_size / 2.0, step=vs30_step_size
-    )
-    return {'dist_bins': dist_bins, 'mag_bins': mag_bins, 'vs30_bins': vs30_bins}
+
+def get_waves_real_bin(s_dat, distbs, mbs, verbose=0):
+    # get dataframe with attributes
+    df = s_dat.df_meta
+    # get waves
+    wfs = s_dat.wfs
+    cnorms = s_dat.cnorms
+    # print(df.shape)
+    # select bin of interest
+    ix = ((distbs[0] <= df['dist']) & (df['dist'] < distbs[1]) &
+          (mbs[0] <= df['mag']) & (df['mag'] <= mbs[1]))
+
+    # get normalization coefficients
+    df_s = df[ix]
+    # get waveforms
+    ws_r = wfs[ix, :]
+    c_r = cnorms[ix]
+    n_obs = ix.sum()
+
+    means = {'dist': df_s['dist'].mean(),
+             'mag': df_s['mag'].mean(),
+             }
+    if verbose:
+        print('# observations', n_obs)
+        print(f"Mag range: [{df_s['mag'].min():.2f}, {df_s['mag'].max():.2f})")
+        print(f"Mag mean: {df_s['mag'].mean():.2f}")
+
+        print(f"Dist range: [{df_s['dist'].min():.2f}, {df_s['dist'].max():.2f})")
+        print(f"Mag mean: {df_s['dist'].mean():.2f}")
+
+    return (ws_r, c_r, means, n_obs)
+
+
+def get_synthetic_data(G, n_waveforms, sdat_train, dist, mag, args):
+    """get_synthetic_data returns n=n_waveforms number of synthetic waveforms for the corresponding conditional variables.
+
+    _extended_summary_
+
+    :param G: Generator object to create waveforms
+    :type G: Generator
+    :param n_waveforms: number of waveforms to create
+    :type n_waveforms: int
+    :param n_cond_bins: number of distance bins to use
+    :type n_cond_bins: int
+    :param dist: conditional variable for distance
+    :type dist: float
+    :param dataset: _description_
+    :type dataset: WaveDatasetDist
+    :param noise_dim: _description_
+    :type noise_dim: int
+    :param lt: _description_
+    :type lt: int
+    :param dt: _description_
+    :type dt: float
+    :return: list of len n_waveforms of synthetic waveforms
+    :rtype: list
+    """
+    # Create some extra waveforms to filter out mode collapse
+    samples = 2 * n_waveforms
+
+    dist_max = sdat_train.vc_max["dist"]
+    mag_max = sdat_train.vc_max["mag"]
+
+    vc_list = [
+        dist / dist_max * torch.ones(samples, 1).cuda(),
+        mag / mag_max * torch.ones(samples, 1).cuda(),
+    ]
+
+    grf = rand_noise(1, args.noise_dim, device=device)
+    z = grf.sample(samples)
+
+    G.eval()
+    x_g, x_scaler = G(z, *vc_list)
+
+    x_g = x_g.squeeze().detach().cpu()
+    x_scaler = x_scaler.squeeze().detach().cpu()
+
+    good_samples = []
+    for wf, scaler in zip(x_g, x_scaler):
+        tv = np.sum(np.abs(np.diff(wf)))
+        # If generator sample fails to generate a seismic signal, skip it.
+        # threshold value is emperically chosen
+        """
+        if tv < 40:
+            continue
+        """
+        
+        good_samples.append(wf * scaler)
+    return good_samples[:n_waveforms]
 
 
 def calc_mean_distances(G, dataset, wfs, c_norms, means, samples, noise_dim):
@@ -72,16 +152,13 @@ def calc_mean_distances(G, dataset, wfs, c_norms, means, samples, noise_dim):
     
     dist = means['dist']
     mag = means['mag']
-    vs30 = means['vs30']
 
     dist_max = dataset.df_meta['dist'].max()
     mag_max = dataset.df_meta['mag'].max()
-    vs30_max = dataset.df_meta['vs30'].max()
 
     vc_list = [
         dist / dist_max * torch.ones(samples, 1).cuda(),
         mag / mag_max * torch.ones(samples, 1).cuda(),
-        vs30 / vs30_max * torch.ones(samples, 1).cuda(),
     ]
 
     grf = rand_noise(1, noise_dim, device=device)
@@ -106,7 +183,6 @@ def plot_metrics_matrix(G, dataset, vc_bins, dirs, args):
 
     dist_bins = vc_bins['dist_bins']
     mag_bins = vc_bins['mag_bins']
-    vs30_bins = vc_bins['vs30_bins']
 
     n_dist_bins = len(dist_bins) - 1 
     n_mag_bins = len(mag_bins) - 1
@@ -114,7 +190,7 @@ def plot_metrics_matrix(G, dataset, vc_bins, dirs, args):
     for i in range(min(n_dist_bins, n_mag_bins)):
         dist_border = [dist_bins[i], dist_bins[i+1]]
         mag_border = [mag_bins[i], mag_bins[i+1]]
-        wfs, c_norms, means, n_obs = get_waves_real_bin(dataset, dist_border, mag_border, vs30_bins)
+        wfs, c_norms, means, n_obs = get_waves_real_bin(dataset, dist_border, mag_border)
         dist_bin_centers.append(means['dist'].round(1))
         mag_bin_centers.append(means['mag'].round(1))
 
@@ -123,20 +199,19 @@ def plot_metrics_matrix(G, dataset, vc_bins, dirs, args):
     
     dist_max = dataset.df_meta['dist'].max()
     mag_max = dataset.df_meta['mag'].max()
-    vs30_max = dataset.df_meta['vs30'].max()
 
     for i in range(n_dist_bins):
         for j in range(n_mag_bins):
             dist_border = [dist_bins[i], dist_bins[i+1]]
             mag_border = [mag_bins[j], mag_bins[j+1]]
-            wfs, c_norms, means, n_obs = get_waves_real_bin(dataset, dist_border, mag_border, vs30_bins)
+            wfs, c_norms, means, n_obs = get_waves_real_bin(dataset, dist_border, mag_border)
             
             if n_obs < 25:
                 print(f"Bucket [{i}, {j}] only contains {n_obs} waveforms.")
                 print(f"Dist: [{dist_border[0]:.2f}, {dist_border[1]:.2f}], Mag: [{mag_border[0]:.2f}, {mag_border[1]:.2f}]")
                 # continue
             
-            plot_real_syn_bucket(G, wfs, c_norms, means, n_obs, dist_border, mag_border, dirs, dist_max, mag_max, vs30_max, device, args)
+            plot_real_syn_bucket(G, wfs, c_norms, means, n_obs, dist_border, mag_border, dirs, dist_max, mag_max, device, args)
             l2, mse = calc_mean_distances(G, dataset, wfs, c_norms, means, n_obs, args.noise_dim)
             
             l2_mat[i, j] = l2
@@ -172,7 +247,7 @@ def evaluate_model(G, n_waveforms, dataset, dirs, epoch, args):
     grid_dir = dirs['grid_dir']
     assert dataset.vc_min["dist"] == dataset.df_meta['dist'].min()
 
-    cond_var_bins = get_cond_var_bins(dataset, 10, args.no_vs30_bins)
+    cond_var_bins = get_cond_var_bins(dataset, 6, args.no_vs30_bins)
 
     n_rows = 8
     n_cols = 4
@@ -185,9 +260,6 @@ def evaluate_model(G, n_waveforms, dataset, dirs, epoch, args):
     mag_min = dataset.df_meta['mag'].min()
     mag_max = dataset.df_meta['mag'].max()
     mag_mean = dataset.df_meta['mag'].mean()
-        
-    vs30_mean = dataset.df_meta['vs30'].mean()
-    vs30_max = dataset.df_meta['vs30'].max()
     
     dists = [dist_min, dist_mean, dist_max]
     mags = [mag_min, mag_mean, mag_max]
@@ -205,7 +277,6 @@ def evaluate_model(G, n_waveforms, dataset, dirs, epoch, args):
             vc_list = [
                 dist / dist_max * torch.ones(n_waveforms, 1).cuda(),
                 mag / mag_max * torch.ones(n_waveforms, 1).cuda(),
-                vs30_mean / vs30_max * torch.ones(n_waveforms, 1).cuda(),
             ]
 
             grf = rand_noise(1, args.noise_dim, device=device)
@@ -239,7 +310,6 @@ def evaluate_model(G, n_waveforms, dataset, dirs, epoch, args):
             vc_list = [
                 dist / dist_max * torch.ones(n_waveforms, 1).cuda(),
                 mag / mag_max * torch.ones(n_waveforms, 1).cuda(),
-                vs30_mean / vs30_max * torch.ones(n_waveforms, 1).cuda(),
             ]
 
             grf = rand_noise(1, args.noise_dim, device=device)
@@ -270,7 +340,6 @@ def evaluate_model(G, n_waveforms, dataset, dirs, epoch, args):
         vc_list = [
                 dist / dist_max * torch.ones(n_tot, 1).cuda(),
                 mag / mag_max * torch.ones(n_tot, 1).cuda(),
-                vs30_mean / vs30_max * torch.ones(n_tot, 1).cuda(),
         ]
         grf = rand_noise(1, args.noise_dim, device=device)
         random_data = grf.sample(n_tot)
@@ -309,120 +378,24 @@ def evaluate_model(G, n_waveforms, dataset, dirs, epoch, args):
         plt.close('all')
         plt.clf()
         plt.cla()
+        plt.close()
 
-        vs30 = vs30_mean
         samples = get_synthetic_data(
             G,
             n_waveforms,
             dataset,
             dist,
             mag,
-            vs30,
             args
         )
         
-        # plot_syn_data_grid(samples, dt, dist, mag, vs30, fig_dir)
-        plot_syn_data_single(samples, dist, mag, vs30, fig_dir, args)
+        plot_syn_data_single(samples, dist, mag, fig_dir, args)
 
     # mlflow.log_artifacts(f"{dirs['models_dir']}", f"{dirs['output_dir']}/models")
     # mlflow.log_artifacts(f"{dirs['training_dir']}", f"{dirs['output_dir']}/training_plots")
     mlflow.log_artifacts(f"{dirs['fig_dir']}", f"{dirs['output_dir']}/figs")
     mlflow.log_artifacts(f"{dirs['metrics_dir']}", f"{dirs['output_dir']}/metrics")
     mlflow.log_artifacts(f"{dirs['grid_dir']}", f"{dirs['output_dir']}/grid_plots")
-
-
-def get_synthetic_data(G, n_waveforms, sdat_train, dist, mag, vs30, args):
-    """get_synthetic_data returns n=n_waveforms number of synthetic waveforms for the corresponding conditional variables.
-
-    _extended_summary_
-
-    :param G: Generator object to create waveforms
-    :type G: Generator
-    :param n_waveforms: number of waveforms to create
-    :type n_waveforms: int
-    :param n_cond_bins: number of distance bins to use
-    :type n_cond_bins: int
-    :param dist: conditional variable for distance
-    :type dist: float
-    :param dataset: _description_
-    :type dataset: WaveDatasetDist
-    :param noise_dim: _description_
-    :type noise_dim: int
-    :param lt: _description_
-    :type lt: int
-    :param dt: _description_
-    :type dt: float
-    :return: list of len n_waveforms of synthetic waveforms
-    :rtype: list
-    """
-    # Create some extra waveforms to filter out mode collapse
-    samples = 2 * n_waveforms
-
-    dist_max = sdat_train.vc_max["dist"]
-    mag_max = sdat_train.vc_max["mag"]
-    vs30_max = sdat_train.vc_max["vs30"]
-
-    vc_list = [
-        dist / dist_max * torch.ones(samples, 1).cuda(),
-        mag / mag_max * torch.ones(samples, 1).cuda(),
-        vs30 / vs30_max * torch.ones(samples, 1).cuda(),
-    ]
-
-    grf = rand_noise(1, args.noise_dim, device=device)
-    z = grf.sample(samples)
-
-    G.eval()
-    x_g, x_scaler = G(z, *vc_list)
-
-    x_g = x_g.squeeze().detach().cpu()
-    x_scaler = x_scaler.squeeze().detach().cpu()
-
-    good_samples = []
-    for wf, scaler in zip(x_g, x_scaler):
-        tv = np.sum(np.abs(np.diff(wf)))
-        # If generator sample fails to generate a seismic signal, skip it.
-        # threshold value is emperically chosen
-        if tv < 40:
-            continue
-
-        good_samples.append(wf * scaler)
-    return good_samples[:n_waveforms]
-
-
-def get_waves_real_bin(s_dat, distbs, mbs, vsb, verbose=0):
-    # get dataframe with attributes
-    df = s_dat.df_meta
-    # get waves
-    wfs = s_dat.wfs
-    cnorms = s_dat.cnorms
-    # print(df.shape)
-    # select bin of interest
-    ix = ((distbs[0] <= df['dist']) & (df['dist'] < distbs[1]) &
-          (mbs[0] <= df['mag']) & (df['mag'] <= mbs[1]) &
-          (vsb[0] <= df['vs30']) & (df['vs30'] < vsb[1]))
-
-    # get normalization coefficients
-    df_s = df[ix]
-    # get waveforms
-    ws_r = wfs[ix, :]
-    c_r = cnorms[ix]
-    n_obs = ix.sum()
-
-    means = {'dist': df_s['dist'].mean(),
-             'mag': df_s['mag'].mean(),
-             'vs30': df_s['vs30'].mean()}
-    if verbose:
-        print('# observations', n_obs)
-        print(f"Mag range: [{df_s['mag'].min():.2f}, {df_s['mag'].max():.2f})")
-        print(f"Mag mean: {df_s['mag'].mean():.2f}")
-
-        print(f"Dist range: [{df_s['dist'].min():.2f}, {df_s['dist'].max():.2f})")
-        print(f"Mag mean: {df_s['dist'].mean():.2f}")
-
-        print(f"Vs30 range: [{df_s['vs30'].min():.2f}, {df_s['vs30'].max():.2f})")
-        print(f"Vs30 mean: {df_s['vs30'].mean():.2f}")
-      
-    return (ws_r, c_r, means, n_obs)
 
 
 def main():
@@ -439,13 +412,15 @@ def main():
     print("MLFlow run ID: ", run_id)
     print(args)
 
-    condv_names = ["dist", "mag", "vs30"]
+    condv_names = ["dist", "mag"]
+    
+    """
     nbins_dict = {
         "dist": args.n_cond_bins,
         "mag": args.n_cond_bins,
-        "vs30": args.n_cond_bins * (1 - args.no_vs30_bins) + args.no_vs30_bins
     }
     print(f"Conditioanl Variable Bins: {nbins_dict}")
+    """
 
     dirs = set_up_folders(run_id, args)
     print(f"Output directory: {dirs['output_dir']}\nModel directory: {dirs['models_dir']}")
@@ -506,12 +481,14 @@ def main():
     d_optimizer = optim.Adam(
         D.parameters(),
         lr=args.learning_rate,
-        betas=[args.beta1, args.beta2]
+        betas=[args.beta1, args.beta2],
+        # weight_decay=0.01,
     )
     g_optimizer = optim.Adam(
         G.parameters(),
         lr=args.learning_rate,
-        betas=[args.beta1, args.beta2]
+        betas=[args.beta1, args.beta2],
+        # weight_decay=0.01,
     )
 
     losses_train = []
@@ -592,7 +569,6 @@ def main():
                 alpha_cn = alpha.view(Nsamp, 1)
                 # Get random interpolation between real and fake samples
                 # for waves
-
                 real_wfs = real_wfs.view(-1, 1, 1000, 1)
                 real_lcn = real_lcn.view(real_lcn.size(0), -1)
 
@@ -767,7 +743,7 @@ def main():
 
             # 1. get real data
             # get random sample
-            (data_b, ln_cb, i_vc) = sdat_train.get_rand_batch()
+            (data_b, ln_cb, i_vc) = sdat_val.get_rand_batch()
             # waves
             real_wfs = torch.from_numpy(data_b).float()
             # normalization constans
@@ -853,7 +829,7 @@ def main():
             z = uniform_noise(batch_size, args.noise_dim)
             z = torch.from_numpy(z).float()
             # get random sampling of conditional variables
-            i_vg = sdat_train.get_rand_cond_v()
+            i_vg = sdat_val.get_rand_cond_v()
             i_vg = [torch.from_numpy(i_v).float() for i_v in i_vg]
             # move to GPU
             if cuda:
@@ -883,15 +859,6 @@ def main():
             save_loc_epoch = f"{dirs['output_dir']}/model_epoch_{i_epoch + 1:05}"
             mlflow.pytorch.save_model(G, save_loc_epoch)
             mlflow.pytorch.log_model(G, save_loc_epoch)
-
-            # models_dir = os.path.join(save_loc_epoch, "models")
-            # if not os.path.exists(models_dir):
-            #     os.makedirs(models_dir)
-
-            # # create directory for figures
-            # training_dir = os.path.join(save_loc_epoch, "training_plots")
-            # if not os.path.exists(training_dir):
-            #     os.makedirs(training_dir)
 
             metrics_dir = os.path.join(save_loc_epoch, "metrics")
             if not os.path.exists(metrics_dir):
@@ -929,6 +896,18 @@ def main():
                 args
             )
 
+            # try:
+            #     n_waveforms = 72 * 5
+            #     evaluate_model(
+            #         G,
+            #         n_waveforms,
+            #         sdat_all,
+            #         epoch_loc_dirs,
+            #         i_epoch,
+            #         args
+            #     )
+            # except:
+            #     print("Model evaluation failed. Continuing training ...")
 
     # back to train mode
     G.train()
@@ -965,6 +944,13 @@ def main():
         args
     )
 
+    try:
+        train_log = f'train_log.txt'
+        gan_out = os.path.join(dirs['output_dir'], train_log)
+        shutil.copyfile(train_log, gan_out)
+        mlflow.log_artifact(train_log, f"{dirs['output_dir']}/train_log")
+    except:
+        print("Failed to save training log.")
 
 if __name__ == "__main__":
     main()

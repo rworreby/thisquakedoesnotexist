@@ -39,7 +39,7 @@ class ParamParser:
         model_args.add_argument('-c', '--n_critic', type=int, default=10,
                                 help='Number of critic iterations per GAN training cycle. Default: 10')
         model_args.add_argument('-gp', '--gp_lambda', type=float, default=10.0,
-                                help='?. Default: 10')
+                                help='Scaler value of the gradient penalty term for the WGAN. Default: 10')
         model_args.add_argument('-b1', '--beta1', type=float, default=0.0,
                                 help='Adam optimizer parameter beta1. Default: 0.0')
         model_args.add_argument('-b2', '--beta2', type=float, default=0.9,

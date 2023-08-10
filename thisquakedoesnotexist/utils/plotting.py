@@ -4,6 +4,7 @@ import os
 
 import numpy as np
 import matplotlib as mpl
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import seaborn as sns
 import torch
@@ -20,7 +21,7 @@ def _rolling_window(x, window_len, step_length):
         pos += step_length
 
 
-def plot_syn_data_single(samples, dist, mag, vs30, fig_dir, args):
+def plot_syn_data_single(samples, dist, mag, fig_dir, args):
     # TODO: Rethink if the dependency injecton of having the model
     # discriminator size being the signal length is sound
     tt = args.time_delta * np.arange(args.discriminator_size)
@@ -114,10 +115,9 @@ def plot_syn_data_single(samples, dist, mag, vs30, fig_dir, args):
         plt.close('all')
         plt.clf()
         plt.cla()
-        
 
 
-def plot_syn_data_grid(samples, dist, mag, vs30, fig_dir, args):
+def plot_syn_data_grid(samples, dist, mag, fig_dir, args):
     n_rows = 12
     n_cols = 6
     n_tot = n_rows * n_cols 
@@ -149,8 +149,8 @@ def plot_syn_data_grid(samples, dist, mag, vs30, fig_dir, args):
     plt.cla()
 
     
-def plot_real_syn_bucket(G, wfs, c_norms, means, n_obs, dist_border, mag_border, dirs, dist_max, mag_max, vs30_max, device, args):
-    # wfs, c_norms, means, n_obs = get_waves_real_bin(sdat_train, dist_border, mag_border, vs30_bins, verbose=3)
+def plot_real_syn_bucket(G, wfs, c_norms, means, n_obs, dist_border, mag_border, dirs, dist_max, mag_max, device, args):
+    # wfs, c_norms, means, n_obs = get_waves_real_bin(sdat_train, dist_border, mag_border, verbose=3)
 
     c_norms = c_norms.reshape(-1, 1)
     real_data = np.log(np.abs(wfs * c_norms) + 1e-10)
@@ -167,12 +167,10 @@ def plot_real_syn_bucket(G, wfs, c_norms, means, n_obs, dist_border, mag_border,
 
     dist = means['dist']
     mag = means['mag']
-    vs30 = means['vs30']
 
     vc_list = [
         dist / dist_max * torch.ones(samples, 1).cuda(),
         mag / mag_max * torch.ones(samples, 1).cuda(),
-        vs30 / vs30_max * torch.ones(samples, 1).cuda(),
     ]
 
     grf = rand_noise(1, args.noise_dim, device=device)
@@ -224,7 +222,8 @@ def plot_waves_1C(dataset, ws, i_vg, args, t_max=50.0, ylim=None, fig_file=None,
         # in case there are less observations than points to plot
         n_plots = ws.shape[0]
 
-    ws_p = ws[:n_plots, :]
+    idx = np.linspace(0, args.batch_size-1, n_plots, dtype=int)
+    ws_p = ws[idx, :]
 
     # select waves to plot
     tt = args.time_delta * np.arange(nt)
@@ -239,18 +238,17 @@ def plot_waves_1C(dataset, ws, i_vg, args, t_max=50.0, ylim=None, fig_file=None,
     plt.xlabel("Time [s]")
 
     for ik in range(n_plots):
-        wf = ws_p[ik,:]
+        wf = ws_p[ik, :]
 
         dist = dataset.to_real(i_vg[0][ik], 'dist').cpu().numpy()[0]
         mag = dataset.to_real(i_vg[1][ik], 'mag').cpu().numpy()[0]
-        vs30 = dataset.to_real(i_vg[2][ik], 'vs30').cpu().numpy()[0]
 
         ax[ik].plot(tt, wf, lw=0.5)
 
         low, high = ax[ik].get_ylim()
         bound = max(abs(low), abs(high))
         ax[ik].set_ylim(-bound, bound)
-        ax[ik].set_title(f'Dist: {dist:.1f}, Mag: {mag:.1f}, Vs30: {vs30:.1f}')
+        ax[ik].set_title(f'Dist: {dist:.1f}, Mag: {mag:.1f}')
 
         if ylim is not None:
             ax[ik].set_ylim(ylim)
@@ -272,6 +270,6 @@ def plot_waves_1C(dataset, ws, i_vg, args, t_max=50.0, ylim=None, fig_file=None,
             plt.clf()
     else:
         fig.show()
+    plt.close('all')
     plt.clf()
     plt.cla()
-    plt.close('all')

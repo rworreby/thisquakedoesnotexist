@@ -7,7 +7,8 @@ Subpackages
 .. toctree::
    :maxdepth: 4
 
-   thisquakedoesnotexist.ffn1d
+   thisquakedoesnotexist.condensed_code
+   thisquakedoesnotexist.utils
 
 Submodules
 ----------

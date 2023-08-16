@@ -11,7 +11,10 @@ import torch
 from thisquakedoesnotexist.utils.random_fields import rand_noise
 
 sns.set()
-mpl.use('Agg')
+color_palette = sns.color_palette('dark')
+colors = [color_palette[3], color_palette[7], color_palette[0], color_palette[1], color_palette[2], color_palette[4], color_palette[5], color_palette[6], color_palette[8], color_palette[9]]
+sns.set_palette(sns.color_palette(colors))
+# mpl.use('Agg')
 
 def _rolling_window(x, window_len, step_length):
     pos = 0
@@ -198,7 +201,7 @@ def plot_real_syn_bucket(G, wfs, c_norms, means, n_obs, dist_border, mag_border,
     plt.xlabel('Time [s]')
     plt.legend()
     plt.title(f"Obs: {n_obs}, Dist: [{dist_border[0]:.1f},{dist_border[1]:.1f}] km, Mag: [{mag_border[0]:.1f},{mag_border[1]:.1f}]")
-    fig_file = os.path.join(dirs['metrics_dir'], f'synthetic_real_comp_dist_{dist:3,.2f}_mag_{mag:.2f}.{args.plot_format}')
+    fig_file = os.path.join(dirs['metrics_dir'], f'synthetic_real_comp_dist_{dist_border[0]:03.0f}-{dist_border[1]:03.0f}_mag_{mag_border[0]:02.1f}-{mag_border[1]:02.1f}.{args.plot_format}')
     plt.savefig(fig_file, format=f'{args.plot_format}')
     plt.close('all')
     plt.clf()
@@ -239,8 +242,8 @@ def plot_waves_1C(dataset, ws, i_vg, args, t_max=50.0, ylim=None, fig_file=None,
     for ik in range(n_plots):
         wf = ws_p[ik, :]
 
-        dist = dataset.to_real(i_vg[0][ik], 'dist').cpu().numpy()[0]
-        mag = dataset.to_real(i_vg[1][ik], 'mag').cpu().numpy()[0]
+        dist = dataset.to_real(i_vg[0][idx[ik]], 'dist').cpu().numpy()[0]
+        mag = dataset.to_real(i_vg[1][idx[ik]], 'mag').cpu().numpy()[0]
 
         ax[ik].plot(tt, wf, lw=0.5)
 

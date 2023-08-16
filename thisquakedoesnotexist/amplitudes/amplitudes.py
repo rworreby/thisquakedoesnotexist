@@ -17,17 +17,18 @@ import torch.optim as optim
 
 from thisquakedoesnotexist.models.gan import Discriminator, Generator
 from thisquakedoesnotexist.utils.param_parser import ParamParser
-# from thisquakedoesnotexist.utils.plotting import plot_syn_data_grid
 from thisquakedoesnotexist.utils.plotting import plot_syn_data_single
 from thisquakedoesnotexist.utils.plotting import plot_waves_1C
 from thisquakedoesnotexist.utils.plotting import plot_real_syn_bucket
 from thisquakedoesnotexist.utils.random_fields import rand_noise, uniform_noise
-# from thisquakedoesnotexist.utils.tracking import log_model_mlflow
 from thisquakedoesnotexist.utils.tracking import log_params_mlflow
 from thisquakedoesnotexist.utils.data_utils import SeisData, set_up_folders
 
 sns.set()
-mpl.use('Agg')
+color_palette = sns.color_palette('dark')
+colors = [color_palette[3], color_palette[7], color_palette[0], color_palette[1], color_palette[2], color_palette[4], color_palette[5], color_palette[6], color_palette[8], color_palette[9]]
+sns.set_palette(sns.color_palette(colors))
+# mpl.use('Agg')
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 cuda = True if torch.cuda.is_available() else False
 device = torch.device("cuda" if cuda else "cpu")
@@ -211,7 +212,7 @@ def plot_metrics_matrix(G, dataset, vc_bins, dirs, args):
                 print(f"Dist: [{dist_border[0]:.2f}, {dist_border[1]:.2f}], Mag: [{mag_border[0]:.2f}, {mag_border[1]:.2f}]")
                 # continue
             
-            plot_real_syn_bucket(G, wfs, c_norms, means, n_obs, dist_border, mag_border, dirs, dist_max, mag_max, device, args)
+            # plot_real_syn_bucket(G, wfs, c_norms, means, n_obs, dist_border, mag_border, dirs, dist_max, mag_max, device, args)
             l2, mse = calc_mean_distances(G, dataset, wfs, c_norms, means, n_obs, args.noise_dim)
             
             l2_mat[i, j] = l2
@@ -379,6 +380,151 @@ def evaluate_model(G, n_waveforms, dataset, dirs, epoch, args):
         plt.clf()
         plt.cla()
 
+        # ---------- 3x3 matrices ----------
+        plt.figure()
+        fig, axs = plt.subplots(3, 3, sharex='col', sharey='all',
+                                gridspec_kw={'hspace': 0.2, 'wspace': 0.05},
+                                figsize=(20,12),
+                                )
+        fig.add_subplot(111, frameon=False)
+        plt.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
+        plt.grid(False)
+
+        for i, distbucket in enumerate([0, 4, 8]):
+            for j, magbucket in enumerate([1, 5, 8]):
+                dist_border = [cond_var_bins['dist_bins'][distbucket], cond_var_bins['dist_bins'][distbucket+1]]
+                mag_border = [cond_var_bins['mag_bins'][magbucket], cond_var_bins['mag_bins'][magbucket+1]]
+                wfs, c_norms, means, n_obs = get_waves_real_bin(dataset, dist_border, mag_border)
+
+                c_norms = c_norms.reshape(-1, 1)
+                real_data = np.log(np.abs(wfs * c_norms) + 1e-10)
+                rd_25 = np.exp(np.percentile(real_data, 25, axis=0))
+                rd_75 = np.exp(np.percentile(real_data, 75, axis=0))
+                real_data_mean = np.exp(real_data.mean(axis=0))
+                real_data = np.exp(real_data)
+
+                samples = n_obs
+                dt = 0.05
+
+                dist = means['dist']
+                mag = means['mag']
+                
+                vc_list = [
+                    dist / dist_max * torch.ones(samples, 1).cuda(),
+                    mag / mag_max * torch.ones(samples, 1).cuda(),
+                ]
+
+                random_data = grf.sample(samples)
+                syn_data, syn_scaler = G(random_data, *vc_list)
+                syn_data = syn_data.squeeze().detach().cpu().numpy()
+                syn_data = syn_data * syn_scaler.detach().cpu().numpy()
+                synthetic_data_log = np.log(np.abs(syn_data + 1e-10))
+                sd_mean = np.mean(synthetic_data_log, axis=0)
+                sd_mean = np.exp(sd_mean)
+
+                sd_25 = np.exp(np.percentile(synthetic_data_log, 25, axis=0))
+                sd_75 = np.exp(np.percentile(synthetic_data_log, 75, axis=0))
+
+                Nt = synthetic_data_log.shape[1]
+                tt = dt * np.arange(0, Nt)
+
+                # fig = plt.figure(figsize=(16, 8))
+                axs[i,j].semilogy(tt, sd_mean, '-' , label=f'Synthetic Data', alpha=0.8, lw=0.5)
+                axs[i,j].fill_between(tt, sd_75, sd_25, alpha=0.1)
+                axs[i,j].semilogy(tt, real_data_mean, '-', label=f'Real Data', alpha=0.8, lw=0.5)
+                axs[i,j].fill_between(tt, rd_75, rd_25, alpha=0.1)
+                
+                axs[i,j].set_title(f"Obs: {n_obs}, Dist: [{dist_border[0]:.1f},{dist_border[1]:.1f}] km, Mag: [{mag_border[0]:.1f},{mag_border[1]:.1f}]")
+                axs[i,j].legend(loc=4)
+                
+        axs[1, 0].set_ylabel('Log-Amplitude')
+        axs[2, 1].set_xlabel('Time [s]')
+        # fig.suptitle(f'Randomly drawn samples from Generator. Dist: {dist:.2f} km, Mag: {mag:.2f}')
+        fig_file = os.path.join(dirs['metrics_dir'], f"3x3_model_eval.{args.plot_format}")
+        plt.savefig(fig_file, format=f"{args.plot_format}")
+        plt.close('all')
+        plt.clf()
+        plt.cla()
+
+        # --- freq ----
+        plt.figure()
+        fig, axs = plt.subplots(3, 3, sharex='col', sharey='all',
+                                gridspec_kw={'hspace': 0.2, 'wspace': 0.05},
+                                figsize=(20,12),
+                                )
+        fig.add_subplot(111, frameon=False)
+        plt.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
+        plt.grid(False)
+
+        for i, distbucket in enumerate([0, 4, 8]):
+            for j, magbucket in enumerate([1, 5, 8]):
+                samples = n_obs
+                dt = 0.05
+
+                dist = means['dist']
+                mag = means['mag']
+                
+                vc_list = [
+                    dist / dist_max * torch.ones(samples, 1).cuda(),
+                    mag / mag_max * torch.ones(samples, 1).cuda(),
+                ]
+
+                random_data = grf.sample(samples)
+                syn_data, syn_scaler = G(random_data, *vc_list)
+                syn_data = syn_data.squeeze().detach().cpu().numpy()
+                syn_data = syn_data * syn_scaler.detach().cpu().numpy()
+
+                s_fft = np.fft.rfft(syn_data)
+                s_ps = np.sqrt(np.real(s_fft * np.conj(s_fft)))
+                s_freq = np.fft.rfftfreq(syn_data.shape[1], dt)
+
+                # TODO:
+                # Change to mean of log or median! 
+                sig = np.median(s_ps, axis=0)
+                axs[i,j].loglog(s_freq, sig, lw=0.5, label='Synthetic Data')
+
+                sd_25 = np.exp(np.percentile(np.log(s_ps), 25, axis=0))
+                sd_75 = np.exp(np.percentile(np.log(s_ps), 75, axis=0))
+
+                nt = sig.shape[0]
+                tt = np.linspace(s_freq.min(), s_freq.max(), nt)
+                axs[i,j].fill_between(tt, sd_75, sd_25, alpha=0.1)
+
+                dist_border = [cond_var_bins['dist_bins'][distbucket], cond_var_bins['dist_bins'][distbucket+1]]
+                mag_border = [cond_var_bins['mag_bins'][magbucket], cond_var_bins['mag_bins'][magbucket+1]]
+                wfs, c_norms, means, n_obs = get_waves_real_bin(dataset, dist_border, mag_border)
+
+                c_norms = c_norms.reshape(-1, 1)
+                signal = wfs * c_norms
+                
+                s_fft = np.fft.rfft(signal)
+                s_ps = np.sqrt(np.real(s_fft * np.conj(s_fft)))
+                freq = np.fft.rfftfreq(signal.shape[1], dt)
+                sig = np.median(s_ps, axis=0)
+                
+                axs[i,j].loglog(freq, sig, lw=0.5, label='Real Data')
+
+                # real_data = np.log(np.abs(wfs * c_norms) + 1e-10)
+                rd_25 = np.exp(np.percentile(np.log(s_ps), 25, axis=0))
+                rd_75 = np.exp(np.percentile(np.log(s_ps), 75, axis=0))
+
+                nt = sig.shape[0]
+                tt = np.linspace(freq.min(), freq.max(), nt)
+                axs[i,j].fill_between(tt, rd_75, rd_25, alpha=0.1)
+                
+                axs[i,j].set_title(f"Obs: {n_obs}, Dist: [{dist_border[0]:.1f},{dist_border[1]:.1f}] km, Mag: [{mag_border[0]:.1f},{mag_border[1]:.1f}]")
+                axs[i,j].legend(loc=2)
+                
+        axs[1, 0].set_ylabel('Log Fourier Amplitude')
+        axs[2, 1].set_xlabel('Frequency [Hz]')
+        fig_file = os.path.join(dirs['metrics_dir'], f"3x3_model_eval_frequency.{args.plot_format}")
+        plt.savefig(fig_file, format=f"{args.plot_format}")
+        plt.close('all')
+        plt.clf()
+        plt.cla()
+
+        # --------------------------------
+
         samples = get_synthetic_data(
             G,
             n_waveforms,
@@ -526,7 +672,7 @@ def main():
         n_critic = args.n_critic
 
         # TODO: REMOVE THIS AGAIN
-        n_train_btot = 1
+        # n_train_btot = 1
         for i_batch in range(n_train_btot):
             for i_c in range(n_critic):
                 ### ---------- DISCRIMINATOR STEP ---------------
@@ -721,12 +867,6 @@ def main():
             fig_file=fig_file,
             stitle=stl,
         )
-        # store model
-        # fmodel = os.path.join(dirs['models_dir'], f"model_G_epoch_{i_epoch + 1:05}.pth")
-        # torch.save({"state_dict": G.state_dict()}, fmodel)
-
-        # plot validation statistics
-        # fig_file = os.path.join(tt_stats_dir, f"val_plots_{i_epoch}.{args.plot_format}")
 
         # back to train mode
         G.train()
@@ -854,6 +994,9 @@ def main():
         # store losses
         losses_val.append((d_val_wloss, d_val_gploss, g_val_loss))
         ### --------- End Validation -------
+        
+        # TODO: Change back to: ... % 10 == 0
+        # shorthand: ... % 4 == 2
         if (i_epoch + 1) % 10 == 0:
             save_loc_epoch = f"{dirs['output_dir']}/model_epoch_{i_epoch + 1:05}"
             mlflow.pytorch.save_model(G, save_loc_epoch)
@@ -873,16 +1016,9 @@ def main():
                 
             epoch_loc_dirs = {
                 "output_dir": save_loc_epoch,
-                # "models_dir": models_dir,
-                # "training_dir": training_dir,
                 "metrics_dir": metrics_dir,
                 "grid_dir": grid_dir,
                 "fig_dir": fig_dir,
-                # "models_dir": f"{save_loc_epoch}/models",
-                # "training_dir": f"{save_loc_epoch}/training_plots",
-                # "fig_dir": f"{save_loc_epoch}/figs",
-                # "metrics_dir": f"{save_loc_epoch}/metrics",
-                # "grid_dir": f"{save_loc_epoch}/grid_plots",
             }
             
             n_waveforms = 72 * 5
@@ -894,19 +1030,6 @@ def main():
                 i_epoch,
                 args
             )
-
-            # try:
-            #     n_waveforms = 72 * 5
-            #     evaluate_model(
-            #         G,
-            #         n_waveforms,
-            #         sdat_all,
-            #         epoch_loc_dirs,
-            #         i_epoch,
-            #         args
-            #     )
-            # except:
-            #     print("Model evaluation failed. Continuing training ...")
 
     # back to train mode
     G.train()
@@ -950,6 +1073,7 @@ def main():
         mlflow.log_artifact(train_log, f"{dirs['output_dir']}/train_log")
     except:
         print("Failed to save training log.")
+
 
 if __name__ == "__main__":
     main()

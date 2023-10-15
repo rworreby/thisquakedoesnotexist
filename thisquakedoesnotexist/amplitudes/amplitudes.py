@@ -85,7 +85,7 @@ def get_waves_real_bin(s_dat, distbs, mbs, verbose=0):
         print(f"Dist range: [{df_s['dist'].min():.2f}, {df_s['dist'].max():.2f})")
         print(f"Mag mean: {df_s['dist'].mean():.2f}")
 
-    return (ws_r, c_r, means, n_obs)
+    return (ws_r, c_r, df_s, means, n_obs)
 
 
 def get_synthetic_data(G, n_waveforms, sdat_train, dist, mag, args):
@@ -191,7 +191,7 @@ def plot_metrics_matrix(G, dataset, vc_bins, dirs, args):
     for i in range(min(n_dist_bins, n_mag_bins)):
         dist_border = [dist_bins[i], dist_bins[i+1]]
         mag_border = [mag_bins[i], mag_bins[i+1]]
-        wfs, c_norms, means, n_obs = get_waves_real_bin(dataset, dist_border, mag_border)
+        wfs, c_norms, df_s, means, n_obs = get_waves_real_bin(dataset, dist_border, mag_border)
         dist_bin_centers.append(means['dist'].round(1))
         mag_bin_centers.append(means['mag'].round(1))
 
@@ -205,7 +205,7 @@ def plot_metrics_matrix(G, dataset, vc_bins, dirs, args):
         for j in range(n_mag_bins):
             dist_border = [dist_bins[i], dist_bins[i+1]]
             mag_border = [mag_bins[j], mag_bins[j+1]]
-            wfs, c_norms, means, n_obs = get_waves_real_bin(dataset, dist_border, mag_border)
+            wfs, c_norms, df_s, means, n_obs = get_waves_real_bin(dataset, dist_border, mag_border)
             
             if n_obs < 25:
                 print(f"Bucket [{i}, {j}] only contains {n_obs} waveforms.")
@@ -394,7 +394,7 @@ def evaluate_model(G, n_waveforms, dataset, dirs, epoch, args):
             for j, magbucket in enumerate([1, 5, 8]):
                 dist_border = [cond_var_bins['dist_bins'][distbucket], cond_var_bins['dist_bins'][distbucket+1]]
                 mag_border = [cond_var_bins['mag_bins'][magbucket], cond_var_bins['mag_bins'][magbucket+1]]
-                wfs, c_norms, means, n_obs = get_waves_real_bin(dataset, dist_border, mag_border)
+                wfs, c_norms, df_s, means, n_obs = get_waves_real_bin(dataset, dist_border, mag_border)
 
                 c_norms = c_norms.reshape(-1, 1)
                 real_data = np.log(np.abs(wfs * c_norms) + 1e-10)
@@ -492,7 +492,7 @@ def evaluate_model(G, n_waveforms, dataset, dirs, epoch, args):
 
                 dist_border = [cond_var_bins['dist_bins'][distbucket], cond_var_bins['dist_bins'][distbucket+1]]
                 mag_border = [cond_var_bins['mag_bins'][magbucket], cond_var_bins['mag_bins'][magbucket+1]]
-                wfs, c_norms, means, n_obs = get_waves_real_bin(dataset, dist_border, mag_border)
+                wfs, c_norms, df_s, means, n_obs = get_waves_real_bin(dataset, dist_border, mag_border)
 
                 c_norms = c_norms.reshape(-1, 1)
                 signal = wfs * c_norms
@@ -558,14 +558,6 @@ def main():
     print(args)
 
     condv_names = ["dist", "mag"]
-    
-    """
-    nbins_dict = {
-        "dist": args.n_cond_bins,
-        "mag": args.n_cond_bins,
-    }
-    print(f"Conditioanl Variable Bins: {nbins_dict}")
-    """
 
     dirs = set_up_folders(run_id, args)
     print(f"Output directory: {dirs['output_dir']}\nModel directory: {dirs['models_dir']}")
@@ -579,12 +571,15 @@ def main():
     ix_all = np.arange(n_samples)
     # get training indexes
     n_train = int(n_samples * args.frac_train)
-    ix_train = np.random.choice(ix_all, size=n_train, replace=False)
+    ix_train = np.random.choice(ix_all, size=n_train, replace=False, )
     ix_train.sort()
     # get validation indexes
     ix_val = np.setdiff1d(ix_all, ix_train, assume_unique=True)
     ix_val.sort()
     
+    mlflow.log_param("Training Indices", ix_train)
+    mlflow.log_param("Validation Indices", ix_val)
+
     sdat_all = SeisData(
         data_file=args.data_file,
         attr_file=args.attr_file,

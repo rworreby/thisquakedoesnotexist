@@ -10,7 +10,7 @@ from thisquakedoesnotexist.utils.preprocessor import Preprocessor
 sns.set()
 
 def main():
-    input_file = 'thisquakedoesnotexist/data/japan/wforms_GAN_input_v20220805.h5'
+    input_file = '/data/projects/japan/wforms_GAN_input_v20220805.h5'
     outfile = 'thisquakedoesnotexist/data/japan/downsampled.h5'
 
     # initial time of recording

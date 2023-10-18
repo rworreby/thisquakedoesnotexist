@@ -21,6 +21,7 @@ cloudpickle==2.2.1
 cmake==3.26.0
 comm==0.1.2
 contourpy==1.0.7
+coverage==7.2.5
 cycler==0.11.0
 Cython==0.29.33
 databricks-cli==0.17.5
@@ -167,7 +168,7 @@ sympy==1.11.1
 tables==3.8.0
 tabulate==0.9.0
 terminado==0.17.1
--e git+ssh://git@gitlab.ethz.ch/worreby-msc-thesis/thisquakedoesnotexist.git@058c62d309d87faed78932ad8532ccafae144316#egg=thisquakedoesnotexist
+-e git+ssh://git@gitlab.ethz.ch/worreby-msc-thesis/thisquakedoesnotexist.git@3611c002795074090e9f28f154dee700c6db18f8#egg=thisquakedoesnotexist
 threadpoolctl==3.1.0
 tinycss2==1.2.1
 tomli==2.0.1

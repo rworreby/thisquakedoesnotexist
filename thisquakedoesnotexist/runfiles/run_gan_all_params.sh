@@ -23,7 +23,7 @@ print_freq=400
 save_freq=1
 plot_format='pdf'
 tracking_uri="/home/rworreby/thisquakedoesnotexist/mlruns/"
-experiment_name="Unnamed Experiment"
+experiment_name="GAN 1D"
 
 
 python thisquakedoesnotexist/amplitudes/amplitudes.py \
@@ -32,7 +32,7 @@ python thisquakedoesnotexist/amplitudes/amplitudes.py \
     -dt "$dt" --noise_dim "$noise_dim" --learning_rate "$learning_rate" \
     --n_critic "$n_critic" --gp_lambda "$gp_lambda" --beta1 "$beta1" \
     --beta2 "$beta2" --sample_rate "$sample_rate" \
-    --n_cond_bins "$n_cond_bins" --nvb --epochs "$epochs" \
+    --n_cond_bins "$n_cond_bins" -nvb --epochs "$epochs" \
     --batch_size "$batch_size" --frac_train "$frac_train" \
     --output_dir "$output_dir" --print_freq "$print_freq" \
     --save_freq "$save_freq" --plot_format "$plot_format" \

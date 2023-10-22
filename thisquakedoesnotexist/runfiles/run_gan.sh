@@ -13,7 +13,7 @@ model_file="thisquakedoesnotexist/models/gan.py"
 plot_format='pdf'
 
 for epochs in 200; do
-    python thisquakedoesnotexist/amplitudes/amplitudes.py --gpus "$gpus" \
+    python thisquakedoesnotexist/thisquakedoesnotexist.py --gpus "$gpus" \
         --experiment_name "$experiment_name" --batch_size "$batch_size" \
         --noise_dim "$noise_dim" --sample_rate "$sample_rate" \
         --frac_train "$frac_train" --n_critic "$critic_iter" -lr "$lr" \

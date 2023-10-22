@@ -26,7 +26,7 @@ tracking_uri="/home/rworreby/thisquakedoesnotexist/mlruns/"
 experiment_name="GAN 1D"
 
 
-python thisquakedoesnotexist/amplitudes/amplitudes.py \
+python thisquakedoesnotexist/thisquakedoesnotexist.py \
     --gpus "$gpus" --model_name "$model_name" --data_file "$data_file" \
     --attr_file "$attr_file" --model_file "$model_file" -lt "$lt" \
     -dt "$dt" --noise_dim "$noise_dim" --learning_rate "$learning_rate" \

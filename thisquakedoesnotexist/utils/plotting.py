@@ -8,7 +8,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import torch
 
-from thisquakedoesnotexist.utils.random_fields import rand_noise
+from utils.random_fields import rand_noise
+
 
 sns.set()
 color_palette = sns.color_palette('dark')

@@ -22,9 +22,9 @@ class ParamParser:
         setup_args.add_argument('-af', '--attr_file', type=str, default='thisquakedoesnotexist/data/japan/attributes.csv',
                                 help='Path to attributes data file. Needs to by in .csv format.\
                                     Default: thisquakedoesnotexist/data/japan/attributes.csv"')
-        setup_args.add_argument('-mf', '--model_file', type=str, default='thisquakedoesnotexist/models/gan_d1.py',
+        setup_args.add_argument('-mf', '--model_file', type=str, default='thisquakedoesnotexist/models/gan.py',
                                 help='Path to GAN model architecture file.\
-                                    Default: "thisquakedoesnotexist/models/gan_d1.py"')    
+                                    Default: "thisquakedoesnotexist/models/gan.py"')    
 
         # Model parameters
         model_args = parser.add_argument_group('Model Parameters')

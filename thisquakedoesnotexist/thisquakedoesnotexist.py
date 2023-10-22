@@ -10,19 +10,19 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 import mlflow
-
 import torch
 from torch.autograd import Variable
 import torch.optim as optim
 
-from thisquakedoesnotexist.models.gan import Discriminator, Generator
-from thisquakedoesnotexist.utils.param_parser import ParamParser
-from thisquakedoesnotexist.utils.plotting import plot_syn_data_single
-from thisquakedoesnotexist.utils.plotting import plot_waves_1C
-from thisquakedoesnotexist.utils.plotting import plot_real_syn_bucket
-from thisquakedoesnotexist.utils.random_fields import rand_noise, uniform_noise
-from thisquakedoesnotexist.utils.tracking import log_params_mlflow
-from thisquakedoesnotexist.utils.data_utils import SeisData, set_up_folders
+from models.gan import Discriminator, Generator
+from utils.param_parser import ParamParser
+from utils.plotting import plot_syn_data_single
+from utils.plotting import plot_waves_1C
+from utils.plotting import plot_real_syn_bucket
+from utils.random_fields import rand_noise, uniform_noise
+from utils.tracking import log_params_mlflow
+from utils.data_utils import SeisData, set_up_folders
+
 
 sns.set()
 color_palette = sns.color_palette('dark')

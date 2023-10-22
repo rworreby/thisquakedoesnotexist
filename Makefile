@@ -97,7 +97,7 @@ preprocess: clean ## run data preprocessing: downsampling, filtering, filling Na
 	python thisquakedoesnotexist/condensed_code/preprocess_data.py
 
 train: clean ## train the conditional GAN model
-	./thisquakedoesnotexist/condensed_code/run_cwgan_1d.sh
+	./thisquakedoesnotexist/runfiles/run_gan_short.sh
 
 pipeline: preprocess train ## runs the preprocessor and training steps successively
 

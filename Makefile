@@ -94,7 +94,7 @@ preprocess: clean ## run data preprocessing: downsampling, filtering, filling Na
 	rm -f thisquakedoesnotexist/data/japan/attributes.csv
 	rm -f thisquakedoesnotexist/data/japan/downsampled.h5
 	rm -f thisquakedoesnotexist/data/japan/waveforms.npy
-	python thisquakedoesnotexist/condensed_code/preprocess_data.py
+	python thisquakedoesnotexist/utils/preprocess_data.py
 
 train: clean ## train the conditional GAN model
 	./thisquakedoesnotexist/runfiles/run_gan_short.sh

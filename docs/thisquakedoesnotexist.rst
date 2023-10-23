@@ -7,19 +7,12 @@ Subpackages
 .. toctree::
    :maxdepth: 4
 
-   thisquakedoesnotexist.condensed_code
+   thisquakedoesnotexist.models
+   thisquakedoesnotexist.unused_utils
    thisquakedoesnotexist.utils
 
 Submodules
 ----------
-
-thisquakedoesnotexist.cli module
---------------------------------
-
-.. automodule:: thisquakedoesnotexist.cli
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
 thisquakedoesnotexist.thisquakedoesnotexist module
 --------------------------------------------------

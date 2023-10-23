@@ -25,6 +25,7 @@ Synthetic Earthquake Data Generation using Generative Adverserial Networks
 Installation
 ------------
 .. code-block:: bash
+
     # Create your virtual environment and activate it
     $ python3 -m venv venv
     $ source venv/bin/activate
@@ -41,6 +42,7 @@ All experiments are by default tracked by MLFlow, with the tracking URI default 
 Don't forget set the tracking URI to the local setup.
 If you haven't set permissions for your user to create folders in that path, you might have to create the folder over the terminal first, using the following command:
 .. code-block:: bash
+
     mkdir -p /home/mlflow/mlruns
 
 Running Code
@@ -60,6 +62,7 @@ You should always pipe the error out put and std output if you detach a process.
 
 Here is a full example of how to start a training process from a file and pipe the process:
 .. code-block:: bash
+    
     nohup make train_file file=run_amplitudes.sh &> train_log.txt &
 
 Note that the parameter file `run_amplitudes.sh` must be places in the appropriate folder `thisquakedoesnotexist/runfiles/`

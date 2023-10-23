@@ -1,4 +1,4 @@
-"""Top-level package for This Quake Does Not Exist."""
+"""Models package for This Quake Does Not Exist."""
 
 __author__ = """Robin Worreby"""
 __email__ = 'robin.worreby@math.ethz.ch'

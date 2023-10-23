@@ -42,6 +42,6 @@ setup(
     test_suite='tests',
     tests_require=test_requirements,
     url='https://gitlab.ethz.ch/worreby-msc-thesis/thisquakedoesnotexist',
-    version='0.1.0',
+    version='1.0.0',
     zip_safe=False,
 )

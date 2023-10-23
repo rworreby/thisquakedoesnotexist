@@ -55,6 +55,58 @@ def set_up_folders(run_id, args):
     return dirs
 
 
+def get_cond_var_bins(dataset, num_bins=10, no_vs30=False):
+    # Add slight padding to boundaries in both directions in order to include
+    # values that land on the boundaries of the bins
+    dist_min = dataset.vc_min["dist"] - 1e-5
+    dist_max = dataset.vc_max["dist"] + 1e-5
+    dist_step_size = (dist_max - dist_min) / num_bins
+    dist_bins = np.arange(
+        dist_min, dist_max + dist_step_size / 2.0, step=dist_step_size
+    )
+
+    mag_min = dataset.vc_min["mag"] - 1e-5
+    mag_max = dataset.vc_max["mag"] + 1e-5
+    mag_step_size = (mag_max - mag_min) / num_bins
+    mag_bins = np.arange(
+        mag_min, mag_max + mag_step_size / 2.0, step=mag_step_size
+    )
+    
+    return {'dist_bins': dist_bins, 'mag_bins': mag_bins}
+
+
+def get_waves_real_bin(s_dat, distbs, mbs, verbose=0):
+    # get dataframe with attributes
+    df = s_dat.df_meta
+    # get waves
+    wfs = s_dat.wfs
+    cnorms = s_dat.cnorms
+    # print(df.shape)
+    # select bin of interest
+    ix = ((distbs[0] <= df['dist']) & (df['dist'] < distbs[1]) &
+          (mbs[0] <= df['mag']) & (df['mag'] <= mbs[1]))
+
+    # get normalization coefficients
+    df_s = df[ix]
+    # get waveforms
+    ws_r = wfs[ix, :]
+    c_r = cnorms[ix]
+    n_obs = ix.sum()
+
+    means = {'dist': df_s['dist'].mean(),
+             'mag': df_s['mag'].mean(),
+             }
+    if verbose:
+        print('# observations', n_obs)
+        print(f"Mag range: [{df_s['mag'].min():.2f}, {df_s['mag'].max():.2f})")
+        print(f"Mag mean: {df_s['mag'].mean():.2f}")
+
+        print(f"Dist range: [{df_s['dist'].min():.2f}, {df_s['dist'].max():.2f})")
+        print(f"Mag mean: {df_s['dist'].mean():.2f}")
+
+    return (ws_r, c_r, df_s, means, n_obs)
+
+
 # rescale conditional variables
 def rescale(v):
     """

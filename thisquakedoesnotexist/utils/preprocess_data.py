@@ -9,6 +9,7 @@ import seaborn as sns
 from thisquakedoesnotexist.utils.preprocessor import Preprocessor
 sns.set()
 
+
 def main():
     input_file = '/data/projects/japan/wforms_GAN_input_v20220805.h5'
     outfile = 'thisquakedoesnotexist/data/japan/downsampled.h5'
@@ -33,6 +34,6 @@ def main():
     preprocessor.select_shallow_crustal()
     preprocessor.save_to_files()
 
+
 if __name__ == '__main__':
     main()
-

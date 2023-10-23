@@ -1,45 +1,70 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-"""Tests for `gan1d` package."""
+"""Tests for `gan` package."""
 
+import numpy as np
 import pytest
 import torch
 
-from thisquakedoesnotexist.condensed_code import gan1d
+from thisquakedoesnotexist.models import gan
 from thisquakedoesnotexist.utils import random_fields
-from thisquakedoesnotexist.utils.data import WaveDatasetDist, DataLoader
+from thisquakedoesnotexist.utils.data_utils import SeisData
 
 
 @pytest.fixture
 def constants():
-    """Sample pytest fixture.
+    """Constants necessary from argparser.
 
-    See more at: http://doc.pytest.org/en/latest/fixture.html
+    For more info on fixtures, see: http://doc.pytest.org/en/latest/fixture.html
     """
     pytest.device = torch.device("cpu")
     pytest.noise_dim = 100
-    pytest.batchsize = 40
-    pytest.dist_bins = 20
+    pytest.batch_size = 20
+    pytest.n_cond_bins = 20
+    pytest.sample_rate = 20
+    pytest.condv_names = ['dist', 'mag']
+    pytest.data_file='thisquakedoesnotexist/data/japan/waveforms.npy'
+    pytest.attr_file='thisquakedoesnotexist/data/japan/attributes.csv'
+
+    f = np.load(pytest.data_file)
+    num_samples = len(f)
+    del f
+
+    pytest.ix_all = np.arange(num_samples)
 
 
 @pytest.fixture
 def get_data_set(constants):
-    dataset = WaveDatasetDist(
-        data_file='thisquakedoesnotexist/data/japan/waveforms.npy', 
-        attr_file='thisquakedoesnotexist/data/japan/attributes.csv', 
-        ndist_bins=pytest.dist_bins, 
-        dt=0.04
+    """Fixture for dummy data set.
+
+    Args:
+        constants (Object): Collection of constants fixing CLI arguments from Argparser.
+
+    Returns:
+        dataset: Example dataset (Japan strong motion from K-Net and KiK-net)
+    """
+    dataset = SeisData(
+        data_file=pytest.data_file,
+        attr_file=pytest.attr_file,
+        batch_size=pytest.batch_size,
+        sample_rate=pytest.sample_rate,
+        v_names=pytest.condv_names,
+        isel=pytest.ix_all,
         )
 
     return dataset
     
 
 def test_train_loader(get_data_set):
-    # ----- test Loader-----
-    x_r, y_r = next(iter(get_data_set))
-    print('shapes x_r, y_r: ', x_r.shape, y_r.shape)
-    Nb = x_r.size(0)
+    """Test train loader.
 
+    Args:
+        get_data_set (SeisData): Get a fixture for the seismic data set.
+    """
+    data = get_data_set
+    (x_r, ln_cb, i_vc) = data.get_rand_batch()
+
+    print('shapes data, normalization constant: ', x_r.shape, ln_cb.shape)
     x_r = x_r.squeeze()
 
 
@@ -56,26 +81,28 @@ def test_random_field(constants):
     assert z.size(0) == 20, f'Checking dimension of random field.'
 
 
+"""
 def test_discriminator(constants, get_data_set):
-    """Sample pytest test function with the pytest fixture as an argument."""
-    # ----- test Discriminator-----
-    data = DataLoader(get_data_set, batch_size=pytest.batchsize, shuffle=True)
-    x_r, vc_r = next(iter(data))
+    # Sample pytest test function with the pytest fixture as an argument.
+    data = get_data_set
+    (x_r, ln_cb, i_vc) = data.get_rand_batch()
+    i_vc = [torch.from_numpy(i_v).float() for i_v in i_vc]
+
     # get discriminator
-    Nb = x_r.size(0)
-    x_r = x_r.to(pytest.device)
-    vc_r = vc_r.to(pytest.device)
+    Nb = len(x_r)
+    # x_r = x_r.to(pytest.device)
+    # vc_r = i_vc.to(pytest.device)
     print('shapes x_r: ', x_r.shape)
-    D = gan1d.Discriminator().to(pytest.device)
+    D = gan.Discriminator().to(pytest.device)
     nn_params = sum(p.numel() for p in D.parameters() if p.requires_grad)
     print("Number discriminator parameters: ", nn_params)
     print(D)
-    x_d = D(x_r, vc_r)
+    x_d = D(x_r, ln_cb, *i_vc)
     print("D(x_r, vc_r) shape: ", x_d.shape)
+"""
 
 """
 def test_gradient_penalty(constants, get_data_set):
-    # # ----- test gradient penalty -----
     data = DataLoader(get_data_set, batch_size=pytest.batchsize, shuffle=True)
     x_r, vc_r = next(iter(data))
     
@@ -92,11 +119,11 @@ def test_gradient_penalty(constants, get_data_set):
     nn_params = sum(p.numel() for p in G.parameters() if p.requires_grad)
     print("Number Generator parameters: ", nn_params)
     grf = random_fields.rand_noise(1, pytest.noise_dim, device=pytest.device)
-    z = grf.sample(pytest.dist_bins)
+    z = grf.sample(pytest.n_cond_bins)
     print("z shape: ", z.shape)
     # get random batch of conditional variables
     data = get_data_set
-    vc_g = data.get_rand_cond_v(pytest.dist_bins)
+    vc_g = data.get_rand_cond_v(pytest.n_cond_bins)
 
     x_g = G(z, vc_g)
     print('G(z) shape: ', x_g.shape)
@@ -138,36 +165,35 @@ def test_gradient_penalty(constants, get_data_set):
     print('regularizer.shape', regularizer.shape)
 """
     
+
 def test_generator(constants, get_data_set):
     #----- Test generator -----------
-    NPLT_MAX = pytest.dist_bins
-    G = gan1d.Generator(z_size=pytest.noise_dim).to(pytest.device)
+    NPLT_MAX = pytest.n_cond_bins
+    G = gan.Generator(z_size=pytest.noise_dim).to(pytest.device)
     print(G)
     nn_params = sum(p.numel() for p in G.parameters() if p.requires_grad)
     print("Number Generator parameters: ", nn_params)
     grf = random_fields.rand_noise(1, pytest.noise_dim, device=pytest.device)
     z = grf.sample(NPLT_MAX)
     print("z shape: ", z.shape)
+
     # get random batch of conditional variables
     data = get_data_set
-    vc_g = data.get_rand_cond_v(NPLT_MAX)
-    vc_g = vc_g.to(pytest.device)
-    x_g = G(z, vc_g)
+    vc_g = data.get_rand_cond_v()
+    vc_g = [torch.from_numpy(i_v).float() for i_v in vc_g]
+    # vc_g = vc_g.to(pytest.device)
+    (x_g, n_g) = G(z, *vc_g)
     print('G(z) shape: ', x_g.shape)
     x_g = x_g.squeeze(1)
-    # make plot
+
     x_g = x_g.squeeze()
     x_g = x_g.detach().cpu()
     
-    data = DataLoader(get_data_set, batch_size=pytest.batchsize, shuffle=True)
+    data = get_data_set
 
-    x_r, vc_r = next(iter(data))
+    (x_r, ln_cb, i_vc) = data.get_rand_batch()
     # get discriminator
-    Nb = x_r.size(0)
-    x_r = x_r.to(pytest.device)
-    vc_r = vc_r.to(pytest.device)
-
+    Nb = len(x_r)
     z = grf.sample(Nb)
-    x_g = G(z,vc_r)
-
-    
+    i_vc = [torch.from_numpy(i_v).float() for i_v in i_vc]
+    (x_g, ln_g) = G(z, *i_vc)

@@ -1,11 +1,11 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """Tests for `thisquakedoesnotexist` package."""
 
 import pytest
 
 
-from thisquakedoesnotexist import thisquakedoesnotexist
+#from thisquakedoesnotexist import thisquakedoesnotexist
 
 
 @pytest.fixture

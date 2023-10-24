@@ -41,6 +41,7 @@ MLFLow
 All experiments are by default tracked by MLFlow, with the tracking URI default set to `/home/rworreby/thisquakedoesnotexist/mlruns/`.
 Don't forget set the tracking URI to the local setup.
 If you haven't set permissions for your user to create folders in that path, you might have to create the folder over the terminal first, using the following command:
+
 .. code-block:: bash
 
     mkdir -p /home/mlflow/mlruns
@@ -61,8 +62,9 @@ In order to do this, start a process with `nohup` (or alternatively use `tmux` a
 You should always pipe the error out put and std output if you detach a process.
 
 Here is a full example of how to start a training process from a file and pipe the process:
+
 .. code-block:: bash
-    
+
     nohup make train_file file=run_amplitudes.sh &> train_log.txt &
 
 Note that the parameter file `run_amplitudes.sh` must be places in the appropriate folder `thisquakedoesnotexist/runfiles/`

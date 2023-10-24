@@ -17,7 +17,7 @@ test_requirements = ['pytest>=3', ]
 setup(
     author="Robin Worreby",
     author_email='robin.worreby@math.ethz.ch',
-    python_requires='>=3.10',
+    python_requires='>=3.8',
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'Intended Audience :: Developers',

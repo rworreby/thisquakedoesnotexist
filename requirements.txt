@@ -168,7 +168,6 @@ sympy==1.11.1
 tables==3.8.0
 tabulate==0.9.0
 terminado==0.17.1
--e git+ssh://git@gitlab.ethz.ch/worreby-msc-thesis/thisquakedoesnotexist.git@3611c002795074090e9f28f154dee700c6db18f8#egg=thisquakedoesnotexist
 threadpoolctl==3.1.0
 tinycss2==1.2.1
 tomli==2.0.1

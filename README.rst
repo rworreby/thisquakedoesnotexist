@@ -49,6 +49,7 @@ If you haven't set permissions for your user to create folders in that path, you
 Running Code
 ------------
 The code is set up as follows:
+
 1. Specifying what do to with `make`, e.g. train a model
 2. Setting the model, parameters, and metadata with a `bash` script
 3. Feed the info from point 2. into the code via `Argparse`
